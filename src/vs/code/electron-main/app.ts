@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { app, protocol, session, Session, systemPreferences, WebFrameMain } from 'electron';
+import { app, protocol, session, Session, systemPreferences, WebFrameMain, nativeImage } from 'electron';
 import { addUNCHostToAllowlist, disableUNCAccessRestrictions } from '../../base/node/unc.js';
 import { validatedIpcMain } from '../../base/parts/ipc/electron-main/ipcMain.js';
 import { hostname, release } from 'os';
@@ -122,6 +122,15 @@ import { NativeMcpDiscoveryHelperService } from '../../platform/mcp/node/nativeM
 import { IWebContentExtractorService } from '../../platform/webContentExtractor/common/webContentExtractor.js';
 import { NativeWebContentExtractorService } from '../../platform/webContentExtractor/electron-main/webContentExtractorService.js';
 import ErrorTelemetry from '../../platform/telemetry/electron-main/errorTelemetry.js';
+import { IMetricsService } from '../../workbench/contrib/cortexide/common/metricsService.js';
+import { ICortexideUpdateService } from '../../workbench/contrib/cortexide/common/cortexideUpdateService.js';
+import { ICortexideSCMService } from '../../workbench/contrib/cortexide/common/cortexideSCMTypes.js';
+import { MetricsMainService } from '../../workbench/contrib/cortexide/electron-main/metricsMainService.js';
+import { CortexideMainUpdateService } from '../../workbench/contrib/cortexide/electron-main/cortexideUpdateMainService.js';
+import { CortexideSCMService } from '../../workbench/contrib/cortexide/electron-main/cortexideSCMMainService.js';
+import { LLMMessageChannel } from '../../workbench/contrib/cortexide/electron-main/sendLLMMessageChannel.js';
+import { OllamaInstallerChannel } from '../../workbench/contrib/cortexide/electron-main/ollamaInstallerChannel.js';
+import { MCPChannel } from '../../workbench/contrib/cortexide/electron-main/mcpChannel.js';
 
 /**
  * The main VS Code application. There will only ever be one instance,
@@ -549,6 +558,31 @@ export class CodeApplication extends Disposable {
 			}
 		} catch (error) {
 			this.logService.error(error);
+		}
+
+		try {
+			if (isMacintosh && app.dock) {
+				const iconPaths = [
+					join(this.environmentMainService.appRoot, 'resources', 'linux', 'code.png'),
+					join(this.environmentMainService.appRoot, 'resources', 'win32', 'code_150x150.png'),
+					join(this.environmentMainService.appRoot, 'resources', 'win32', 'code_70x70.png'),
+				];
+
+				for (const iconPath of iconPaths) {
+					try {
+						const iconImage = nativeImage.createFromPath(iconPath);
+						if (!iconImage.isEmpty()) {
+							app.dock.setIcon(iconImage);
+							this.logService.trace(`Set dock icon from: ${iconPath}`);
+							break;
+						}
+					} catch (error) {
+						// Try next icon path
+					}
+				}
+			}
+		} catch (error) {
+			this.logService.trace('Could not set dock icon:', toErrorMessage(error));
 		}
 
 		// Main process server (electron IPC based)
@@ -1093,6 +1127,10 @@ export class CodeApplication extends Disposable {
 			services.set(ITelemetryService, NullTelemetryService);
 		}
 
+		services.set(IMetricsService, new SyncDescriptor(MetricsMainService, undefined, false));
+		services.set(ICortexideUpdateService, new SyncDescriptor(CortexideMainUpdateService, undefined, false));
+		services.set(ICortexideSCMService, new SyncDescriptor(CortexideSCMService, undefined, false));
+
 		// Default Extensions Profile Init
 		services.set(IExtensionsProfileScannerService, new SyncDescriptor(ExtensionsProfileScannerService, undefined, true));
 		services.set(IExtensionsScannerService, new SyncDescriptor(ExtensionsScannerService, undefined, true));
@@ -1227,6 +1265,24 @@ export class CodeApplication extends Disposable {
 		const loggerChannel = new LoggerChannel(accessor.get(ILoggerMainService),);
 		mainProcessElectronServer.registerChannel('logger', loggerChannel);
 		sharedProcessClient.then(client => client.registerChannel('logger', loggerChannel));
+
+		const metricsChannel = ProxyChannel.fromService(accessor.get(IMetricsService), disposables);
+		mainProcessElectronServer.registerChannel('void-channel-metrics', metricsChannel);
+
+		const cortexideUpdateChannel = ProxyChannel.fromService(accessor.get(ICortexideUpdateService), disposables);
+		mainProcessElectronServer.registerChannel('cortexide-channel-update', cortexideUpdateChannel);
+
+		const sendLLMMessageChannel = new LLMMessageChannel(accessor.get(IMetricsService));
+		mainProcessElectronServer.registerChannel('cortexide-channel-llmMessage', sendLLMMessageChannel);
+
+		const cortexideScmChannel = ProxyChannel.fromService(accessor.get(ICortexideSCMService), disposables);
+		mainProcessElectronServer.registerChannel('cortexide-channel-scm', cortexideScmChannel);
+
+		const mcpChannel = new MCPChannel();
+		mainProcessElectronServer.registerChannel('void-channel-mcp', mcpChannel);
+
+		const ollamaInstallerChannel = new OllamaInstallerChannel();
+		mainProcessElectronServer.registerChannel('void-channel-ollamaInstaller', ollamaInstallerChannel);
 
 		// Extension Host Debug Broadcasting
 		const electronExtensionHostDebugBroadcastChannel = new ElectronExtensionHostDebugBroadcastChannel(accessor.get(IWindowsMainService));

@@ -27,6 +27,7 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
 import { IExplorerService } from './files.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
+import { CORTEXIDE_OPEN_SETTINGS_ACTION_ID } from '../../cortexide/browser/cortexideSettingsPane.js';
 
 // Contribute Global Actions
 
@@ -674,6 +675,15 @@ for (const menuId of [MenuId.EmptyEditorGroupContext, MenuId.EditorTabsBarContex
 }
 
 // File menu
+
+MenuRegistry.appendMenuItem(MenuId.MenubarFileMenu, {
+	group: '0_void',
+	command: {
+		id: CORTEXIDE_OPEN_SETTINGS_ACTION_ID,
+		title: nls.localize({ key: 'openVoid', comment: ['&& denotes a mnemonic'] }, "&&Open CortexIDE Settings"),
+	},
+	order: 1
+});
 
 MenuRegistry.appendMenuItem(MenuId.MenubarFileMenu, {
 	group: '1_new',

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+	<id>cortex.desktop</id>
+	<metadata_license>MIT</metadata_license>
+	<project_license>MIT</project_license>
+	<name>CortexIDE</name>
+	<url type="homepage">https://cortexide.com</url>
+	<summary>CortexIDE. Code editing with AI-first workflows.</summary>
+	<description>
+		<p>CortexIDE is a modern code editor with an AI-native development loop, privacy-aware controls, and cross-platform packaging. It supports local models (Ollama) and OpenAI-compatible endpoints.</p>
+	</description>
+</component>
+
+

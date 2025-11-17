@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=CortexIDE URL Handler
+Exec=/usr/share/cortexide/bin/cortex --open-url %U
+Icon=code
+Type=Application
+NoDisplay=true
+MimeType=x-scheme-handler/cortexide;
+
+

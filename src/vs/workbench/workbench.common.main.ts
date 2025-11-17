@@ -9,6 +9,7 @@ import '../editor/editor.all.js';
 
 import './api/browser/extensionHost.contribution.js';
 import './browser/workbench.contribution.js';
+import './contrib/cortexide/browser/cortexide.contribution.js';
 
 //#endregion
 

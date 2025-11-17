@@ -20,6 +20,11 @@ vscode.db
 /cli/openssl
 product.overrides.json
 *.snap.actual
-*.tsbuildinfo
 .vscode-test
-vscode-telemetry-docs/
+
+# CortexIDE added these:
+.tmp/
+.tmp2/
+.tool-versions
+src/vs/workbench/contrib/cortexide/browser/react/out/**
+src/vs/workbench/contrib/cortexide/browser/react/src2/**

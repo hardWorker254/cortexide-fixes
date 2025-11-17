@@ -1,0 +1,19 @@
+[Desktop Entry]
+Name=CortexIDE
+Comment=CortexIDE
+GenericName=CortexIDE
+Exec=/usr/share/cortexide/bin/cortex %F
+Icon=code
+Type=Application
+StartupNotify=true
+Categories=Utility;TextEditor;Development;IDE;
+MimeType=text/plain;inode/directory;application/x-code-workspace;
+Actions=new-empty-window;
+Keywords=Development;IDE;Cortex;CortexIDE;
+
+[Desktop Action new-empty-window]
+Name=New Empty Window
+Exec=/usr/share/cortexide/bin/cortex --new-window %F
+Icon=cortexide
+
+
