@@ -3,7 +3,7 @@
  *  Licensed under the Apache License, Version 2.0. See LICENSE.txt for more information.
  *--------------------------------------------------------------------------------------*/
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAccessor, useIsDark, useSettingsState } from '../util/services.js';
 import { Brain, Check, ChevronRight, DollarSign, ExternalLink, Lock, X } from 'lucide-react';
 import { displayInfoOfProviderName, ProviderName, providerNames, localProviderNames, featureNames, FeatureName, isFeatureNameDisabled } from '../../../../common/cortexideSettingsTypes.js';
@@ -11,9 +11,25 @@ import { ChatMarkdownRender } from '../markdown/ChatMarkdownRender.js';
 import { OllamaSetupInstructions, OneClickSwitchButton, SettingsForProvider, ModelDump } from '../void-settings-tsx/Settings.js';
 import { ColorScheme } from '../../../../../../../platform/theme/common/theme.js';
 import ErrorBoundary from '../sidebar-tsx/ErrorBoundary.js';
-import { isLinux } from '../../../../../../../base/common/platform.js';
+import { FileAccess } from '../../../../../../../base/common/network.js';
 
 const OVERRIDE_VALUE = false
+
+const HERO_LOGO_URI = FileAccess.asBrowserUri('vs/workbench/browser/media/cortexide-main.png').toString(true)
+
+const welcomeHighlights = [
+	'Chat + Quick Edit',
+	'Fast Apply diffs',
+	'PDF & image uploads',
+	'Local & cloud models',
+];
+
+const welcomeStats = [
+	{ label: 'Uploads', value: 'PDFs + Images', detail: 'Drop specs, screenshots, and research straight into chat' },
+	{ label: 'Fast Apply', value: 'Line-by-line', detail: 'Approve every change from the diff that generated it' },
+	{ label: 'Model router', value: 'Auto-switch', detail: 'Chooses Anthropic, GPT-4o, Gemini, DeepSeek, or Ollama per task' },
+	{ label: 'Void upgrades', value: 'More built-ins', detail: 'Fast Apply, attachments, and SCM-aware prompts out of the box' },
+];
 
 export const VoidOnboarding = () => {
 
@@ -26,43 +42,36 @@ export const VoidOnboarding = () => {
 		<div className={`@@void-scope ${isDark ? 'dark' : ''}`}>
 			<div
 				className={`
-					bg-void-bg-3 fixed top-0 right-0 bottom-0 left-0 width-full z-[99999]
-					transition-all duration-1000 ${isOnboardingComplete ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'}
+					fixed inset-0 z-[99999] flex items-center justify-center px-6 py-12
+					bg-[#050507]
+					backdrop-blur-[28px]
+					transition-all duration-700 ease-in-out
+					${isOnboardingComplete ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-100 pointer-events-auto'}
 				`}
-				style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+				style={{
+					backgroundImage: 'radial-gradient(circle at 18% -15%, rgba(255,255,255,0.06), transparent 55%), radial-gradient(circle at 82% 0%, rgba(0,0,0,0.55), transparent 50%)',
+				}}
 			>
 				<ErrorBoundary>
-					<VoidOnboardingContent />
+					<div className="w-full max-w-[1200px]">
+						<VoidOnboardingContent />
+					</div>
 				</ErrorBoundary>
 			</div>
 		</div>
 	)
 }
 
-const VoidIcon = () => {
-	const accessor = useAccessor()
-	const themeService = accessor.get('IThemeService')
-
-	const divRef = useRef<HTMLDivElement | null>(null)
-
-	useEffect(() => {
-		// CortexIDE icon style
-		const updateTheme = () => {
-			const theme = themeService.getColorTheme().type
-			const isDark = theme === ColorScheme.DARK || theme === ColorScheme.HIGH_CONTRAST_DARK
-			if (divRef.current) {
-				divRef.current.style.maxWidth = '220px'
-				divRef.current.style.opacity = '50%'
-				divRef.current.style.filter = isDark ? '' : 'invert(1)' //brightness(.5)
-			}
-		}
-		updateTheme()
-		const d = themeService.onDidColorThemeChange(updateTheme)
-		return () => d.dispose()
-	}, [])
-
-	return <div ref={divRef} className='@@void-void-icon' />
-}
+const VoidIcon = () => (
+	<div className="w-full max-w-[220px] aspect-square rounded-full border border-white/15 bg-white/5 shadow-[0_45px_120px_rgba(0,0,0,0.85)] flex items-center justify-center overflow-hidden">
+		<img
+			src={HERO_LOGO_URI}
+			alt="CortexIDE logo"
+			className="w-[78%] h-[78%] object-contain opacity-95"
+			draggable={false}
+		/>
+	</div>
+)
 
 const FADE_DURATION_MS = 2000
 
@@ -149,127 +158,144 @@ const AddProvidersPage = ({ pageIndex, setPageIndex }: { pageIndex: number, setP
 		};
 	}, [errorMessage]);
 
-	return (<div className="flex flex-col md:flex-row w-full h-[80vh] gap-6 max-w-[900px] mx-auto relative">
-		{/* Left Column */}
-		<div className="md:w-1/4 w-full flex flex-col gap-6 p-6 border-none border-void-border-2 h-full overflow-y-auto">
-			{/* Tab Selector */}
-			<div className="flex md:flex-col gap-2">
-				{[...tabNames, 'Cloud/Other'].map(tab => (
-					<button
-						key={tab}
-						className={`py-2 px-4 rounded-md text-left ${currentTab === tab
-							? 'bg-[#0e70c0]/80 text-white font-medium shadow-sm'
-							: 'bg-void-bg-2 hover:bg-void-bg-2/80 text-void-fg-1'
-							} transition-all duration-200`}
-						onClick={() => {
-							setCurrentTab(tab as TabName);
-							setErrorMessage(null); // Reset error message when changing tabs
-						}}
-					>
-						{tab}
-					</button>
-				))}
+	return (
+		<div className="flex flex-col gap-8 w-full h-[80vh] max-w-[1000px] mx-auto">
+			<div className="space-y-2 text-center md:text-left">
+				<p className="text-xs uppercase tracking-[0.35em] text-void-fg-4">Step 02</p>
+				<h2 className="text-4xl font-light text-void-fg-0">Choose your model providers</h2>
+				<p className="text-base text-void-fg-3 max-w-2xl mx-auto md:mx-0">
+					Load multiple providers at once. CortexIDE can route Chat, Quick Edit, and Autocomplete to the strongest model on every request.
+				</p>
 			</div>
 
-			{/* Feature Checklist */}
-			<div className="flex flex-col gap-1 mt-4 text-sm opacity-80">
-				{featureNameMap.map(({ display, featureName }) => {
-					const hasModel = settingsState.modelSelectionOfFeature[featureName] !== null;
-					return (
-						<div key={featureName} className="flex items-center gap-2">
-							{hasModel ? (
-								<Check className="w-4 h-4 text-emerald-500" />
-							) : (
-								<div className="w-3 h-3 rounded-full flex items-center justify-center">
-									<div className="w-1 h-1 rounded-full bg-white/70"></div>
+			<div className="flex flex-col md:flex-row flex-1 gap-6">
+				{/* Left rail */}
+				<div className="md:w-1/3 w-full flex flex-col gap-6 p-6 rounded-[28px] border border-void-border-3 bg-void-bg-2/70 shadow-[0_35px_90px_rgba(0,0,0,0.35)] h-full overflow-y-auto">
+					<div className="flex flex-wrap md:flex-col gap-2">
+						{[...tabNames, 'Cloud/Other'].map(tab => (
+							<button
+								key={tab}
+								className={`
+									w-full rounded-2xl px-4 py-3 text-left text-sm font-medium tracking-wide transition-all duration-200
+									${currentTab === tab
+										? 'bg-gradient-to-r from-[#0e70c0] to-[#6b5bff] text-white shadow-[0_18px_40px_rgba(28,107,219,0.35)]'
+										: 'bg-void-bg-3/90 text-void-fg-2 border border-void-border-3 hover:border-void-border-1'}
+								`}
+								onClick={() => {
+									setCurrentTab(tab as TabName);
+									setErrorMessage(null);
+								}}
+							>
+								{tab}
+							</button>
+						))}
+					</div>
+
+					<div className="grid gap-3 mt-2 text-sm">
+						<p className="uppercase text-[11px] tracking-[0.4em] text-void-fg-4">Feature coverage</p>
+						{featureNameMap.map(({ display, featureName }) => {
+							const hasModel = settingsState.modelSelectionOfFeature[featureName] !== null;
+							return (
+								<div key={featureName} className="flex items-center justify-between rounded-2xl border border-void-border-4/80 bg-void-bg-3/60 px-4 py-3">
+									<span>{display}</span>
+									{hasModel ? (
+										<span className="inline-flex items-center gap-1 text-emerald-400 text-xs font-medium">
+											<Check className="w-4 h-4" /> Connected
+										</span>
+									) : (
+										<span className="text-xs text-void-fg-4">Pending</span>
+									)}
 								</div>
-							)}
-							<span>{display}</span>
-						</div>
-					);
-				})}
-			</div>
-		</div>
-
-		{/* Right Column */}
-		<div className="flex-1 flex flex-col items-center justify-start p-6 h-full overflow-y-auto">
-			<div className="text-5xl mb-2 text-center w-full">Add a Provider</div>
-
-			<div className="w-full max-w-xl mt-4 mb-10">
-				<div className="text-4xl font-light my-4 w-full">{currentTab}</div>
-				<div className="text-sm opacity-80 text-void-fg-3 my-4 w-full">{descriptionOfTab[currentTab]}</div>
-			</div>
-
-			{providerNamesOfTab[currentTab].map((providerName) => (
-				<div key={providerName} className="w-full max-w-xl mb-10">
-					<div className="text-xl mb-2">
-						Add {displayInfoOfProviderName(providerName).title}
-						{providerName === 'gemini' && (
-							<span
-								data-tooltip-id="void-tooltip-provider-info"
-								data-tooltip-content="Gemini 2.5 Pro offers 25 free messages a day, and Gemini 2.5 Flash offers 500. We recommend using models down the line as you run out of free credits."
-								data-tooltip-place="right"
-								className="ml-1 text-xs align-top text-blue-400"
-							>*</span>
-						)}
-						{providerName === 'openRouter' && (
-							<span
-								data-tooltip-id="void-tooltip-provider-info"
-								data-tooltip-content="OpenRouter offers 50 free messages a day, and 1000 if you deposit $10. Only applies to models labeled ':free'."
-								data-tooltip-place="right"
-								className="ml-1 text-xs align-top text-blue-400"
-							>*</span>
-						)}
+							);
+						})}
 					</div>
-					<div>
-						<SettingsForProvider providerName={providerName} showProviderTitle={false} showProviderSuggestions={true} />
-
-					</div>
-					{providerName === 'ollama' && <OllamaSetupInstructions />}
 				</div>
-			))}
 
-			{(currentTab === 'Local' || currentTab === 'Cloud/Other') && (
-				<div className="w-full max-w-xl mt-8 bg-void-bg-2/50 rounded-lg p-6 border border-void-border-4">
-					<div className="flex items-center gap-2 mb-4">
-						<div className="text-xl font-medium">Models</div>
+				{/* Content */}
+				<div className="flex-1 flex flex-col rounded-[32px] border border-void-border-3 bg-void-bg-1/70 backdrop-blur-xl shadow-[0_45px_120px_rgba(0,0,0,0.45)] p-6">
+					<div className="w-full max-w-xl mx-auto text-center mb-8 space-y-3">
+						<p className="text-xs uppercase tracking-[0.35em] text-void-fg-4">Active tab</p>
+						<div className="text-4xl font-light text-void-fg-0">{currentTab}</div>
+						<div className="text-sm text-void-fg-3">{descriptionOfTab[currentTab]}</div>
 					</div>
 
-					{currentTab === 'Local' && (
-						<div className="text-sm opacity-80 text-void-fg-3 my-4 w-full">Local models should be detected automatically. You can add custom models below.</div>
+					<div className="space-y-6 overflow-y-auto pr-1 flex-1">
+						{providerNamesOfTab[currentTab].map((providerName) => (
+							<div key={providerName} className="rounded-2xl border border-void-border-3/80 bg-void-bg-3/60 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+								<div className="flex items-center justify-between mb-3">
+									<div className="text-xl font-medium text-void-fg-0 flex items-center gap-2">
+										Add {displayInfoOfProviderName(providerName).title}
+										{(providerName === 'gemini' || providerName === 'openRouter') && (
+											<span
+												data-tooltip-id="void-tooltip-provider-info"
+												data-tooltip-place="right"
+												className="text-xs text-blue-400"
+												data-tooltip-content={providerName === 'gemini'
+													? 'Gemini 2.5 Pro offers 25 free chats daily, Flash offers ~500. Upgrade later if you exhaust credits.'
+													: 'OpenRouter grants 50 free chats a day (1000 with a $10 deposit) on models tagged :free.'}
+											>
+												Details
+											</span>
+										)}
+									</div>
+									{providerName === 'ollama' && (
+										<span className="inline-flex items-center gap-1 text-xs text-void-fg-3">
+											<Lock size={12} /> Local
+										</span>
+									)}
+								</div>
+
+								<SettingsForProvider providerName={providerName} showProviderTitle={false} showProviderSuggestions={true} />
+
+								{providerName === 'ollama' && (
+									<div className="mt-4 rounded-xl border border-void-border-4/80 bg-black/20">
+										<OllamaSetupInstructions />
+									</div>
+								)}
+							</div>
+						))}
+					</div>
+
+					{(currentTab === 'Local' || currentTab === 'Cloud/Other') && (
+						<div className="w-full mt-6 rounded-2xl border border-void-border-4/80 bg-void-bg-2/70 p-6">
+							<div className="flex items-center gap-2 mb-4">
+								<div className="text-xl font-medium">Models</div>
+							</div>
+
+							{currentTab === 'Local' && (
+								<div className="text-sm text-void-fg-3 mb-4">Local models auto-detect when possible. Add custom entries to fine tune routing.</div>
+							)}
+
+							{currentTab === 'Local' && <ModelDump filteredProviders={localProviderNames} />}
+							{currentTab === 'Cloud/Other' && <ModelDump filteredProviders={cloudProviders} />}
+						</div>
 					)}
 
-					{currentTab === 'Local' && <ModelDump filteredProviders={localProviderNames} />}
-					{currentTab === 'Cloud/Other' && <ModelDump filteredProviders={cloudProviders} />}
-				</div>
-			)}
-
-
-
-			{/* Navigation buttons in right column */}
-			<div className="flex flex-col items-end w-full mt-auto pt-8">
-				{errorMessage && (
-					<div className="text-amber-400 mb-2 text-sm opacity-80 transition-opacity duration-300">{errorMessage}</div>
-				)}
-				<div className="flex items-center gap-2">
-					<PreviousButton onClick={() => setPageIndex(pageIndex - 1)} />
-					<NextButton
-						onClick={() => {
-							const isDisabled = isFeatureNameDisabled('Chat', settingsState)
-
-							if (!isDisabled) {
-								setPageIndex(pageIndex + 1);
-								setErrorMessage(null);
-							} else {
-								// Show error message
-								setErrorMessage("Please set up at least one Chat model before moving on.");
-							}
-						}}
-					/>
+					<div className="flex flex-col gap-3 items-end w-full mt-6">
+						{errorMessage && (
+							<div className="w-full text-sm rounded-2xl border border-void-warning/30 bg-void-warning/15 text-void-warning px-4 py-3 text-right">
+								{errorMessage}
+							</div>
+						)}
+						<div className="flex items-center gap-2">
+							<PreviousButton onClick={() => setPageIndex(pageIndex - 1)} />
+							<NextButton
+								onClick={() => {
+									const isDisabled = isFeatureNameDisabled('Chat', settingsState)
+									if (!isDisabled) {
+										setPageIndex(pageIndex + 1);
+										setErrorMessage(null);
+									} else {
+										setErrorMessage("Please connect at least one Chat-capable model before moving on.");
+									}
+								}}
+							/>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
-	</div>);
+	);
 };
 // =============================================
 // 	OnboardingPage
@@ -314,27 +340,29 @@ const AddProvidersPage = ({ pageIndex, setPageIndex }: { pageIndex: number, setP
 // 		prev/next
 
 const NextButton = ({ onClick, ...props }: { onClick: () => void } & React.ButtonHTMLAttributes<HTMLButtonElement>) => {
-
-	// Create a new props object without the disabled attribute
-	const { disabled, ...buttonProps } = props;
+	const { disabled, className = '', ...buttonProps } = props;
 
 	return (
 		<button
+			type="button"
 			onClick={disabled ? undefined : onClick}
 			onDoubleClick={onClick}
-			className={`px-6 py-2 bg-zinc-100 ${disabled
-				? 'bg-zinc-100/40 cursor-not-allowed'
-				: 'hover:bg-zinc-100'
-				} rounded text-black duration-600 transition-all
+			className={`
+				inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl font-semibold tracking-tight transition-all duration-300 border border-white/10
+				${disabled
+					? 'bg-white/5 text-white/35 cursor-not-allowed'
+					: 'bg-gradient-to-r from-[#2a2c34] via-[#1b1c23] to-[#101117] text-white shadow-[0_25px_55px_rgba(0,0,0,0.55)] hover:translate-y-[-1px] hover:shadow-[0_30px_70px_rgba(0,0,0,0.65)]'}
+				${className}
 			`}
 			{...disabled && {
 				'data-tooltip-id': 'void-tooltip',
-				"data-tooltip-content": 'Please enter all required fields or choose another provider', // (double-click to proceed anyway, can come back in Settings)
+				"data-tooltip-content": 'Please enter all required fields or choose another provider',
 				"data-tooltip-place": 'top',
 			}}
 			{...buttonProps}
 		>
 			Next
+			<ChevronRight className="w-4 h-4" />
 		</button>
 	)
 }
@@ -342,8 +370,9 @@ const NextButton = ({ onClick, ...props }: { onClick: () => void } & React.Butto
 const PreviousButton = ({ onClick, ...props }: { onClick: () => void } & React.ButtonHTMLAttributes<HTMLButtonElement>) => {
 	return (
 		<button
+			type="button"
 			onClick={onClick}
-			className="px-6 py-2 rounded text-void-fg-3 opacity-80 hover:brightness-115 duration-600 transition-all"
+			className="px-5 py-2.5 rounded-2xl border border-white/15 bg-white/5 text-white/70 hover:text-white hover:border-white/40 hover:bg-white/10 transition-all duration-200"
 			{...props}
 		>
 			Back
@@ -361,10 +390,65 @@ const OnboardingPageShell = ({ top, bottom, content, hasMaxWidth = true, classNa
 	className?: string,
 }) => {
 	return (
-		<div className={`h-[80vh] text-lg flex flex-col gap-4 w-full mx-auto ${hasMaxWidth ? 'max-w-[600px]' : ''} ${className}`}>
-			{top && <FadeIn className='w-full mb-auto pt-16'>{top}</FadeIn>}
-			{content && <FadeIn className='w-full my-auto'>{content}</FadeIn>}
-			{bottom && <div className='w-full pb-8'>{bottom}</div>}
+		<div className={`h-[80vh] w-full ${className}`}>
+			<div className={`
+				text-lg flex flex-col gap-6 w-full h-full mx-auto px-8 py-10
+				rounded-[32px] border border-void-border-3 bg-void-bg-2/70 backdrop-blur-xl
+				shadow-[0_30px_90px_rgba(0,0,0,0.45)]
+				${hasMaxWidth ? 'max-w-[720px]' : ''}
+			`}>
+				{top && <FadeIn className='w-full mb-auto'>{top}</FadeIn>}
+				{content && <FadeIn className='w-full my-auto'>{content}</FadeIn>}
+				{bottom && <div className='w-full pt-6'>{bottom}</div>}
+			</div>
+		</div>
+	)
+}
+
+const WelcomePage = ({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) => {
+	return (
+		<div className="space-y-8">
+			<div className="rounded-[32px] border border-void-border-2 bg-void-bg-2/90 backdrop-blur-2xl shadow-[0_60px_140px_rgba(0,0,0,0.75)] px-10 py-12">
+				<div className="flex flex-col lg:flex-row gap-10 items-center">
+					<div className="flex-1 flex flex-col gap-6 text-center lg:text-left">
+						<p className="text-xs uppercase tracking-[0.45em] text-void-fg-4">Welcome</p>
+						<div>
+							<h1 className="text-5xl font-light text-void-fg-0">Build with the editor AI actually ships in</h1>
+							<p className="text-base text-void-fg-2 mt-3 max-w-xl mx-auto lg:mx-0">
+								CortexIDE keeps Chat, Quick Edit, Fast Apply, and source control in the same dark workspace—and it adds native PDF + image uploads so product specs and design mocks travel with every conversation.
+							</p>
+						</div>
+						<div className="flex flex-wrap gap-3 justify-center lg:justify-start">
+							{welcomeHighlights.map((highlight) => (
+								<span key={highlight} className="px-3 py-1.5 rounded-full border border-void-border-3 bg-void-bg-3/80 text-xs tracking-[0.3em] uppercase text-void-fg-3">
+									{highlight}
+								</span>
+							))}
+						</div>
+						<div className="flex flex-wrap gap-3 justify-center lg:justify-start">
+							<PrimaryActionButton ringSize='xl' onClick={onNext}>Start guided setup</PrimaryActionButton>
+							<SecondaryActionButton onClick={onSkip}>Skip for now</SecondaryActionButton>
+						</div>
+					</div>
+					<div className="flex-1 w-full flex flex-col items-center gap-6">
+						<div className="relative w-full max-w-sm aspect-square">
+							<div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent blur-3xl rounded-[32px]" />
+							<div className="relative w-full h-full rounded-[28px] border border-void-border-2 bg-void-bg-3/80 shadow-[0_45px_110px_rgba(0,0,0,0.7)] flex items-center justify-center p-6">
+								<VoidIcon />
+							</div>
+						</div>
+						<div className="grid grid-cols-2 gap-4 w-full max-w-sm">
+							{welcomeStats.map(({ label, value, detail }) => (
+								<div key={label} className="rounded-2xl border border-void-border-3 bg-void-bg-3/80 p-4 text-center text-void-fg-2">
+									<p className="text-[11px] uppercase tracking-[0.4em] text-void-fg-4">{label}</p>
+									<p className="text-lg font-medium text-void-fg-0 mt-2">{value}</p>
+									<p className="text-xs text-void-fg-3 mt-1">{detail}</p>
+								</div>
+							))}
+						</div>
+					</div>
+				</div>
+			</div>
 		</div>
 	)
 }
@@ -420,49 +504,53 @@ const abbreviateNumber = (num: number): string => {
 
 
 
-const PrimaryActionButton = ({ children, className, ringSize, ...props }: { children: React.ReactNode, ringSize?: undefined | 'xl' | 'screen' } & React.ButtonHTMLAttributes<HTMLButtonElement>) => {
-
+const PrimaryActionButton = ({ children, className = '', ringSize, ...props }: { children: React.ReactNode, ringSize?: undefined | 'xl' | 'screen' } & React.ButtonHTMLAttributes<HTMLButtonElement>) => {
+	const sizingClass = ringSize === 'xl'
+		? 'px-10 py-4 text-lg'
+		: ringSize === 'screen'
+			? 'px-16 py-8 text-2xl w-full'
+			: 'px-5 py-2.5 text-base';
 
 	return (
 		<button
 			type='button'
 			className={`
-				flex items-center justify-center
-
-				text-white dark:text-black
-				bg-black/90 dark:bg-white/90
-
-				${ringSize === 'xl' ? `
-					gap-2 px-16 py-8
-					transition-all duration-300 ease-in-out
-					`
-					: ringSize === 'screen' ? `
-					gap-2 px-16 py-8
-					transition-all duration-1000 ease-in-out
-					`: ringSize === undefined ? `
-					gap-1 px-4 py-2
-					transition-all duration-300 ease-in-out
-				`: ''}
-
-				rounded-lg
-				group
+				inline-flex items-center justify-center gap-2 rounded-[18px] font-semibold tracking-tight
+				text-white border border-white/10
+				bg-gradient-to-r from-[#3a3d47] via-[#23252c] to-[#111216]
+				shadow-[0_35px_80px_rgba(0,0,0,0.6)]
+				hover:shadow-[0_45px_100px_rgba(0,0,0,0.7)] hover:translate-y-[-1px]
+				focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white/20
+				focus-visible:ring-offset-[#050612]
+				transition-all duration-300 group
+				${sizingClass}
 				${className}
 			`}
 			{...props}
 		>
 			{children}
 			<ChevronRight
-				className={`
-					transition-all duration-300 ease-in-out
-
-					transform
-					group-hover:translate-x-1
-					group-active:translate-x-1
-				`}
+				className="transition-transform duration-300 ease-in-out group-hover:translate-x-1 group-active:translate-x-1"
 			/>
 		</button>
 	)
 }
+
+const SecondaryActionButton = ({ children, className = '', ...props }: { children: React.ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+	<button
+		type="button"
+		className={`
+			inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-2.5
+			border border-void-border-2 text-void-fg-2
+			hover:text-void-fg-0 hover:border-void-border-1
+			transition-all duration-200
+			${className}
+		`}
+		{...props}
+	>
+		{children}
+	</button>
+)
 
 
 type WantToUseOption = 'smart' | 'private' | 'cheap' | 'all'
@@ -524,6 +612,11 @@ const VoidOnboardingContent = () => {
 
 	const didFillInSelectedProviderSettings = !!(didFillInProviderSettings && isApiKeyLongEnoughIfApiKeyExists && isAtLeastOneModel)
 
+	const skipOnboarding = (reason: string) => {
+		cortexideSettingsService.setGlobalSetting('isOnboardingComplete', true);
+		voidMetricsService.capture('Skipped Onboarding', { reason, pageIndex, wantToUseOption, selectedProviderName });
+	}
+
 	const prevAndNextButtons = <div className="max-w-[600px] w-full mx-auto flex flex-col items-end">
 		<div className="flex items-center gap-2">
 			<PreviousButton
@@ -541,6 +634,7 @@ const VoidOnboardingContent = () => {
 			<PreviousButton
 				onClick={() => { setPageIndex(pageIndex - 1) }}
 			/>
+			<SecondaryActionButton onClick={() => skipOnboarding('final-step-skip')}>Skip for now</SecondaryActionButton>
 			<PrimaryActionButton
 				onClick={() => {
 					cortexideSettingsService.setGlobalSetting('isOnboardingComplete', true);
@@ -593,30 +687,7 @@ const VoidOnboardingContent = () => {
 
 
 	const contentOfIdx: { [pageIndex: number]: React.ReactNode } = {
-		0: <OnboardingPageShell
-			content={
-				<div className='flex flex-col items-center gap-8'>
-					<div className="text-5xl font-light text-center">Welcome to CortexIDE</div>
-
-					{/* CortexIDE logo */}
-					<div className='max-w-md w-full h-[30vh] mx-auto flex items-center justify-center'>
-						{!isLinux && <VoidIcon />}
-					</div>
-
-
-					<FadeIn
-						delayMs={1000}
-					>
-						<PrimaryActionButton
-							onClick={() => { setPageIndex(1) }}
-						>
-							Get Started
-						</PrimaryActionButton>
-					</FadeIn>
-
-				</div>
-			}
-		/>,
+		0: <WelcomePage onNext={() => setPageIndex(1)} onSkip={() => skipOnboarding('welcome-skip')} />,
 
 		1: <OnboardingPageShell hasMaxWidth={false}
 			content={

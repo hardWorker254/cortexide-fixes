@@ -297,6 +297,77 @@ body.monaco-workbench {
 }
 
 /* ----------------------------------------------------------------------------------------
+ * Explorer / Search / Extensions surfaces
+ * ------------------------------------------------------------------------------------- */
+.monaco-workbench .part.sidebar .composite,
+.monaco-workbench .part.sidebar .pane-body,
+.monaco-workbench .part.sidebar .monaco-list,
+.monaco-workbench .part.sidebar .monaco-list-rows,
+.monaco-workbench .part.sidebar .monaco-tree,
+.monaco-workbench .part.sidebar .split-view-view,
+.monaco-workbench .part.sidebar .pane-body .monaco-list-row,
+.monaco-workbench .part.sidebar .pane-body .monaco-list-row:hover {
+	background-color: var(--cortex-surface-1) !important;
+	color: var(--cortex-text-base) !important;
+}
+
+.monaco-workbench .part.sidebar .pane-header,
+.monaco-workbench .part.sidebar .pane-header .title {
+	background-color: var(--cortex-surface-0) !important;
+	color: var(--cortex-text-base) !important;
+}
+
+.monaco-workbench .extensions-viewlet .extensions-list .monaco-list-row,
+.monaco-workbench .extensions-viewlet .extension-editor,
+.monaco-workbench .extensions-viewlet .extension-editor .body {
+	background-color: var(--cortex-surface-1) !important;
+	color: var(--cortex-text-base) !important;
+}
+
+.monaco-workbench .search-view .search-widget,
+.monaco-workbench .search-view .query-details,
+.monaco-workbench .search-view .monaco-split-view2,
+.monaco-workbench .search-view .results .monaco-list {
+	background-color: var(--cortex-surface-1) !important;
+	color: var(--cortex-text-base) !important;
+	border-color: var(--cortex-border-strong) !important;
+}
+
+/* ----------------------------------------------------------------------------------------
+ * Chat / message input experience
+ * ------------------------------------------------------------------------------------- */
+.monaco-workbench .interactive-session .chat-input-container {
+	background-color: var(--cortex-surface-2) !important;
+	border: 1px solid var(--cortex-border-strong) !important;
+	box-shadow: none !important;
+}
+
+.monaco-workbench .interactive-session .chat-input-container:focus-within {
+	border-color: var(--cortex-brand) !important;
+	box-shadow: 0 0 0 1px var(--cortex-brand) inset;
+}
+
+.monaco-workbench .interactive-session .chat-input-container .chat-editor-container .monaco-editor,
+.monaco-workbench .interactive-session .chat-input-container .chat-editor-container .monaco-editor .monaco-editor-background,
+.monaco-workbench .interactive-session .chat-input-container .chat-editor-container .monaco-editor .margin,
+.monaco-workbench .interactive-session .chat-input-container .chat-editor-container .monaco-editor .inputarea.ime-input {
+	background-color: var(--cortex-surface-2) !important;
+	color: var(--cortex-text-base) !important;
+}
+
+.monaco-workbench .interactive-session .chat-input-container .chat-editor-container .monaco-editor .cursor {
+	border-color: var(--cortex-text-base) !important;
+}
+
+.monaco-workbench .interactive-session .chat-input-toolbars,
+.monaco-workbench .interactive-session .chat-input-toolbars .monaco-toolbar .action-item,
+.monaco-workbench .interactive-session .chat-modelPicker-item {
+	background-color: var(--cortex-surface-0) !important;
+	color: var(--cortex-text-base) !important;
+	border-color: var(--cortex-border-strong) !important;
+}
+
+/* ----------------------------------------------------------------------------------------
  * Settings experience
  * ------------------------------------------------------------------------------------- */
 .monaco-workbench .settings-editor,

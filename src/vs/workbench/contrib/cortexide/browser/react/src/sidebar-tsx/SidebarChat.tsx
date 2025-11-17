@@ -4572,7 +4572,8 @@ export const SidebarChat = () => {
 	>
 		<VoidInputBox2
 			enableAtToMention
-			className={`min-h-[60px] px-1 py-1`}
+			appearance="chatDark"
+			className={`min-h-[60px] px-3 py-3 rounded-2xl`}
 			placeholder={`Message...`}
 			onChangeText={onChangeText}
 			onKeyDown={onKeyDown}
@@ -4699,13 +4700,13 @@ export const SidebarChat = () => {
     ]
 
     const QuickActionsBar = () => (
-        <div className='w-full flex items-center justify-center gap-2 flex-wrap mt-3 select-none'>
+        <div className='w-full flex items-center justify-center gap-2 flex-wrap mt-3 select-none px-1'>
             {quickActions.map(({ id, label }) => {
                 const kb = keybindingService.lookupKeybinding(id)?.getLabel()
                 return (
                     <button
                         key={id}
-                        className='px-2 py-1 rounded bg-void-bg-2 hover:bg-void-bg-2/80 border border-void-border-3 text-xs text-void-fg-2 void-focus-ring'
+                        className='px-3 py-1.5 rounded-full bg-gradient-to-br from-[var(--cortex-surface-2)] via-[var(--cortex-surface-3)] to-[var(--cortex-surface-4)] border border-void-border-3 text-xs text-void-fg-1 shadow-[0_3px_12px_rgba(0,0,0,0.45)] hover:-translate-y-0.5 transition-all duration-150 ease-out void-focus-ring'
                         onClick={() => commandService.executeCommand(id)}
                         title={kb ? `${label} (${kb})` : label}
                     >

@@ -418,13 +418,15 @@ type InputBox2Props = {
 	enableAtToMention?: boolean;
 	fnsRef?: { current: null | TextAreaFns };
 	className?: string;
+	appearance?: 'default' | 'chatDark';
+	style?: React.CSSProperties;
 	onChangeText?: (value: string) => void;
 	onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 	onFocus?: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
 	onBlur?: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
 	onChangeHeight?: (newHeight: number) => void;
 }
-export const VoidInputBox2 = forwardRef<HTMLTextAreaElement, InputBox2Props>(function X({ initValue, placeholder, multiline, enableAtToMention, fnsRef, className, onKeyDown, onFocus, onBlur, onChangeText }, ref) {
+export const VoidInputBox2 = forwardRef<HTMLTextAreaElement, InputBox2Props>(function X({ initValue, placeholder, multiline, enableAtToMention, fnsRef, className = '', appearance = 'default', style, onKeyDown, onFocus, onBlur, onChangeText }, ref) {
 
 
 	// mirrors whatever is in ref
@@ -803,6 +805,23 @@ export const VoidInputBox2 = forwardRef<HTMLTextAreaElement, InputBox2Props>(fun
 
 
 
+	const isChatDark = appearance === 'chatDark'
+	const appearanceClasses = isChatDark
+		? 'text-white placeholder:text-white/40'
+		: 'text-void-fg-1 placeholder:text-void-fg-3'
+
+	const baseStyle: React.CSSProperties = isChatDark
+		? {
+			background: '#030304',
+			color: '#fff',
+			border: '1px solid rgba(255,255,255,0.08)',
+			boxShadow: '0 20px 60px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.02)',
+		}
+		: {
+			background: asCssVariable(inputBackground),
+			color: asCssVariable(inputForeground),
+		}
+
 	return <>
 		<textarea
 			autoFocus={false}
@@ -823,13 +842,8 @@ export const VoidInputBox2 = forwardRef<HTMLTextAreaElement, InputBox2Props>(fun
 
 			disabled={!isEnabled}
 
-			className={`w-full resize-none max-h-[500px] overflow-y-auto text-void-fg-1 placeholder:text-void-fg-3 ${className}`}
-			style={{
-				// defaultInputBoxStyles
-				background: asCssVariable(inputBackground),
-				color: asCssVariable(inputForeground)
-				// inputBorder: asCssVariable(inputBorder),
-			}}
+			className={`w-full resize-none max-h-[500px] overflow-y-auto ${appearanceClasses} ${className}`}
+			style={{ ...baseStyle, ...style }}
 
 			onInput={useCallback((event: React.FormEvent<HTMLTextAreaElement>) => {
 				const latestChange = (event.nativeEvent as InputEvent).data;
