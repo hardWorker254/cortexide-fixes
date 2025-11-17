@@ -29,8 +29,7 @@ import './autocompleteService.js'
 import './cortexideSettingsPane.js'
 
 // register css
-// Note: CSS is loaded via the CSS modules system in desktop builds, not via direct import
-// import './media/cortexide.css'
+import './media/cortexide.css'
 
 // update (frontend part, also see platform/)
 import './cortexideUpdateActions.js'

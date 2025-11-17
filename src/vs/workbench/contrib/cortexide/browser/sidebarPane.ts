@@ -117,7 +117,7 @@ const container = viewContainerRegistry.registerViewContainer({
 	order: 1,
 
 	rejectAddedViews: true,
-	icon: FileAccess.asBrowserUri('vs/workbench/browser/media/code-icon.svg'), // CortexIDE logo
+	icon: FileAccess.asBrowserUri('vs/workbench/browser/media/void-icon-sm.png'), // CortexIDE logo
 
 
 }, ViewContainerLocation.AuxiliaryBar, { doNotRegisterOpenCommand: true, isDefault: true });
@@ -129,7 +129,7 @@ const viewsRegistry = Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry);
 viewsRegistry.registerViews([{
 	id: CORTEXIDE_VIEW_ID,
 	hideByDefault: false, // start open
-	containerIcon: FileAccess.asBrowserUri('vs/workbench/browser/media/code-icon.svg'), // CortexIDE logo
+	containerIcon: FileAccess.asBrowserUri('vs/workbench/browser/media/void-icon-sm.png'), // CortexIDE logo
 	name: nls.localize2('voidChat', ''), // this says ... : CHAT
 	ctorDescriptor: new SyncDescriptor(SidebarViewPane),
 	canToggleVisibility: false,

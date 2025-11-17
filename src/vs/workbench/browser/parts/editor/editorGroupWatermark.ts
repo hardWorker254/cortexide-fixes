@@ -116,7 +116,7 @@ export class EditorGroupWatermark extends Disposable {
 		this.icon = elements.icon; // store icon element to ensure it persists
 
 		// void icon style - ensure it's always visible
-		const logoUri = FileAccess.asBrowserUri('vs/workbench/browser/media/code-icon.svg');
+		const logoUri = FileAccess.asBrowserUri('vs/workbench/browser/media/void-icon-sm.png');
 		const logoUrl = asCSSUrl(logoUri);
 		const updateTheme = () => {
 			const theme = this.themeService.getColorTheme().type
@@ -184,7 +184,7 @@ export class EditorGroupWatermark extends Disposable {
 		if (this.icon) {
 			const theme = this.themeService.getColorTheme().type
 			const isDark = theme === ColorScheme.DARK || theme === ColorScheme.HIGH_CONTRAST_DARK
-			const logoUri = FileAccess.asBrowserUri('vs/workbench/browser/media/code-icon.svg');
+			const logoUri = FileAccess.asBrowserUri('vs/workbench/browser/media/void-icon-sm.png');
 			const logoUrl = asCSSUrl(logoUri);
 			this.icon.style.cssText = `
 				display: block !important;

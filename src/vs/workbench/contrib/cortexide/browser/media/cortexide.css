@@ -3,6 +3,73 @@
  *  Licensed under the Apache License, Version 2.0. See LICENSE.txt for more information.
  *--------------------------------------------------------------------------------------*/
 
+:root {
+	--void-bg-1: #050505;
+	--void-bg-1-alt: #0a0a13;
+	--void-bg-2: #0f1119;
+	--void-bg-2-alt: #151826;
+	--void-bg-2-hover: #1c2032;
+	--void-bg-3: #000000;
+
+	--void-fg-0: #f5f5f7;
+	--void-fg-1: #e4e4ec;
+	--void-fg-2: #bdbdd2;
+	--void-fg-3: #8585a2;
+	--void-fg-4: #5b5b74;
+
+	--void-warning: #f4c95d;
+
+	--void-border-1: #353354;
+	--void-border-2: #242236;
+	--void-border-3: #1b1a29;
+	--void-border-4: #343352;
+
+	--void-ring-color: #7b5cff;
+	--void-link-color: #7b5cff;
+
+	--void-space-1: 2px;
+	--void-space-2: 4px;
+	--void-space-3: 6px;
+	--void-space-4: 8px;
+	--void-space-5: 12px;
+	--void-space-6: 16px;
+	--void-space-7: 20px;
+	--void-space-8: 24px;
+
+	--void-radius-sm: 4px;
+	--void-radius-md: 6px;
+	--void-radius-lg: 8px;
+	--void-radius-xl: 12px;
+
+	--void-transition-fast: 150ms ease-in-out;
+	--void-transition-base: 200ms ease-in-out;
+	--void-transition-slow: 300ms ease-in-out;
+}
+
+body.monaco-workbench,
+.monaco-workbench,
+.monaco-workbench .part.editor,
+.monaco-workbench .part.sidebar,
+.monaco-workbench .part.panel,
+.monaco-workbench .part.activitybar,
+.monaco-workbench .part.titlebar,
+.monaco-workbench .auxiliarybar-part {
+	background-color: var(--void-bg-3) !important;
+	color: var(--void-fg-1) !important;
+}
+
+.monaco-workbench .tab,
+.monaco-workbench .monaco-list,
+.monaco-workbench .split-view-view,
+.monaco-workbench .pane-body,
+.monaco-editor,
+.monaco-editor .margin,
+.monaco-editor-background,
+.monaco-workbench .part.editor>.content .editor-group-container {
+	background-color: var(--void-bg-1) !important;
+	color: var(--void-fg-1) !important;
+}
+
 .monaco-editor .void-sweepIdxBG {
 	background-color: var(--vscode-void-sweepIdxBG);
 }
@@ -216,12 +283,12 @@
 	height: 16px;
 	margin-right: 8px;
 	vertical-align: middle;
-	background-image: url('../../../../browser/media/code-icon.svg');
+	background-image: url('../../../../browser/media/void-icon-sm.png');
 	background-size: contain;
 	background-repeat: no-repeat;
 	background-position: center;
-	-webkit-mask: url('../../../../browser/media/code-icon.svg') no-repeat 50% 50%;
+	-webkit-mask: url('../../../../browser/media/void-icon-sm.png') no-repeat 50% 50%;
 	-webkit-mask-size: 16px;
-	mask: url('../../../../browser/media/code-icon.svg') no-repeat 50% 50%;
+	mask: url('../../../../browser/media/void-icon-sm.png') no-repeat 50% 50%;
 	mask-size: 16px;
 }
