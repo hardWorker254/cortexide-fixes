@@ -1,7 +1,7 @@
-/*--------------------------------------------------------------------------------------
- *  Copyright 2025 Glass Devtools, Inc. All rights reserved.
- *  Licensed under the Apache License, Version 2.0. See LICENSE.txt for more information.
- *--------------------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
@@ -96,8 +96,8 @@ class MarkerCheckService extends Disposable implements IMarkerCheckService {
 					}
 				}
 			}
-		}
-		const { window } = dom.getActiveWindow()
+		};
+		const { window } = dom.getActiveWindow();
 		window.setInterval(check, 5000);
 	}
 

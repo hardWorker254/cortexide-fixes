@@ -1,7 +1,7 @@
-/*--------------------------------------------------------------------------------------
- *  Copyright 2025 Glass Devtools, Inc. All rights reserved.
- *  Licensed under the Apache License, Version 2.0. See LICENSE.txt for more information.
- *--------------------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
@@ -38,20 +38,20 @@ registerAction2(class extends Action2 {
 		});
 	}
 	async run(accessor: ServicesAccessor): Promise<void> {
-		const n = accessor.get(IDummyService)
-		console.log('Hi', n._serviceBrand)
+		const n = accessor.get(IDummyService);
+		console.log('Hi', n._serviceBrand);
 	}
-})
+});
 
 
 class DummyService extends Disposable implements IWorkbenchContribution, IDummyService {
-	static readonly ID = 'workbench.contrib.void.dummy' // workbenchContributions need this, services do not
+	static readonly ID = 'workbench.contrib.void.dummy'; // workbenchContributions need this, services do not
 	_serviceBrand: undefined;
 
 	constructor(
 		@ICodeEditorService codeEditorService: ICodeEditorService,
 	) {
-		super()
+		super();
 
 	}
 }

@@ -1,7 +1,7 @@
-/*--------------------------------------------------------------------------------------
- *  Copyright 2025 Glass Devtools, Inc. All rights reserved.
- *  Licensed under the Apache License, Version 2.0. See LICENSE.txt for more information.
- *--------------------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
@@ -25,8 +25,8 @@ import { getPerformanceHarness } from '../common/performanceHarness.js';
 
 
 
-const allLinebreakSymbols = ['\r\n', '\n']
-const _ln = isWindows ? allLinebreakSymbols[0] : allLinebreakSymbols[1]
+const allLinebreakSymbols = ['\r\n', '\n'];
+const _ln = isWindows ? allLinebreakSymbols[0] : allLinebreakSymbols[1];
 
 // The extension this was called from is here - https://github.com/voideditor/void/blob/autocomplete/extensions/void/src/extension/extension.ts
 
@@ -73,7 +73,9 @@ class LRUCache<K, V> {
 	private disposeCallback?: (value: V, key?: K) => void;
 
 	constructor(maxSize: number, disposeCallback?: (value: V, key?: K) => void) {
-		if (maxSize <= 0) throw new Error('Cache size must be greater than 0');
+		if (maxSize <= 0) {
+			throw new Error('Cache size must be greater than 0');
+		}
 
 		this.items = new Map();
 		this.keyOrder = [];
@@ -148,28 +150,28 @@ type AutocompletionPredictionType =
 	| 'single-line-redo-suffix'
 	// | 'multi-line-start-here'
 	| 'multi-line-start-on-next-line'
-	| 'do-not-predict'
+	| 'do-not-predict';
 
 type Autocompletion = {
-	id: number,
-	prefix: string,
-	suffix: string,
-	llmPrefix: string,
-	llmSuffix: string,
-	startTime: number,
-	endTime: number | undefined,
-	status: 'pending' | 'finished' | 'error',
-	type: AutocompletionPredictionType,
-	llmPromise: Promise<string> | undefined,
-	insertText: string,
-	requestId: string | null,
-	_newlineCount: number,
-}
+	id: number;
+	prefix: string;
+	suffix: string;
+	llmPrefix: string;
+	llmSuffix: string;
+	startTime: number;
+	endTime: number | undefined;
+	status: 'pending' | 'finished' | 'error';
+	type: AutocompletionPredictionType;
+	llmPromise: Promise<string> | undefined;
+	insertText: string;
+	requestId: string | null;
+	_newlineCount: number;
+};
 
-const DEBOUNCE_TIME = 500
-const TIMEOUT_TIME = 60000
-const MAX_CACHE_SIZE = 20
-const MAX_PENDING_REQUESTS = 2
+const DEBOUNCE_TIME = 500;
+const TIMEOUT_TIME = 60000;
+const MAX_CACHE_SIZE = 20;
+const MAX_PENDING_REQUESTS = 2;
 
 // postprocesses the result
 const processStartAndEndSpaces = (result: string) => {
@@ -177,7 +179,7 @@ const processStartAndEndSpaces = (result: string) => {
 	// trim all whitespace except for a single leading/trailing space
 	// return result.trim()
 
-	[result,] = extractCodeFromRegular({ text: result, recentlyAddedTextLen: result.length })
+	[result,] = extractCodeFromRegular({ text: result, recentlyAddedTextLen: result.length });
 
 	const hasLeadingSpace = result.startsWith(' ');
 	const hasTrailingSpace = result.endsWith(' ');
@@ -186,7 +188,7 @@ const processStartAndEndSpaces = (result: string) => {
 		+ result.trim()
 		+ (hasTrailingSpace ? ' ' : '');
 
-}
+};
 
 
 // trims the end of the prefix to improve cache hit rate
@@ -202,7 +204,7 @@ const removeLeftTabsAndTrimEnds = (s: string): string => {
 	s = s.replace(/^\s+/gm, ''); // remove left tabs
 
 	return s;
-}
+};
 
 
 
@@ -210,9 +212,13 @@ const removeAllWhitespace = (str: string): string => str.replace(/\s+/g, '');
 
 
 
-function getIsSubsequence({ of, subsequence }: { of: string, subsequence: string }): [boolean, string] {
-	if (subsequence.length === 0) return [true, ''];
-	if (of.length === 0) return [false, ''];
+function getIsSubsequence({ of, subsequence }: { of: string; subsequence: string }): [boolean, string] {
+	if (subsequence.length === 0) {
+		return [true, ''];
+	}
+	if (of.length === 0) {
+		return [false, ''];
+	}
 
 	let subsequenceIndex = 0;
 	let lastMatchChar = '';
@@ -236,7 +242,7 @@ function getStringUpToUnbalancedClosingParenthesis(s: string, prefix: string): s
 	const pairs: Record<string, string> = { ')': '(', '}': '{', ']': '[' };
 
 	// process all bracets in prefix
-	let stack: string[] = []
+	const stack: string[] = [];
 	const firstOpenIdx = prefix.search(/[[({]/);
 	if (firstOpenIdx !== -1) {
 		const brackets = prefix.slice(firstOpenIdx).split('').filter(c => '()[]{}'.includes(c));
@@ -268,14 +274,14 @@ function getStringUpToUnbalancedClosingParenthesis(s: string, prefix: string): s
 
 
 // further trim the autocompletion
-const postprocessAutocompletion = ({ autocompletionMatchup, autocompletion, prefixAndSuffix }: { autocompletionMatchup: AutocompletionMatchupBounds, autocompletion: Autocompletion, prefixAndSuffix: PrefixAndSuffixInfo }) => {
+const postprocessAutocompletion = ({ autocompletionMatchup, autocompletion, prefixAndSuffix }: { autocompletionMatchup: AutocompletionMatchupBounds; autocompletion: Autocompletion; prefixAndSuffix: PrefixAndSuffixInfo }) => {
 
-	const { prefix, prefixToTheLeftOfCursor, suffixToTheRightOfCursor } = prefixAndSuffix
+	const { prefix, prefixToTheLeftOfCursor, suffixToTheRightOfCursor } = prefixAndSuffix;
 
-	const generatedMiddle = autocompletion.insertText
+	const generatedMiddle = autocompletion.insertText;
 
-	let startIdx = autocompletionMatchup.startIdx
-	let endIdx = generatedMiddle.length // exclusive bounds
+	let startIdx = autocompletionMatchup.startIdx;
+	let endIdx = generatedMiddle.length; // exclusive bounds
 
 	// const naiveReturnValue = generatedMiddle.slice(startIdx)
 	// console.log('naiveReturnValue: ', JSON.stringify(naiveReturnValue))
@@ -285,13 +291,13 @@ const postprocessAutocompletion = ({ autocompletionMatchup, autocompletion, pref
 	// this is a bit hacky but may change a lot
 
 	// if there is space at the start of the completion and user has added it, remove it
-	const charToLeftOfCursor = prefixToTheLeftOfCursor.slice(-1)[0] || ''
-	const userHasAddedASpace = charToLeftOfCursor === ' ' || charToLeftOfCursor === '\t'
-	const rawFirstNonspaceIdx = generatedMiddle.slice(startIdx).search(/[^\t ]/)
+	const charToLeftOfCursor = prefixToTheLeftOfCursor.slice(-1)[0] || '';
+	const userHasAddedASpace = charToLeftOfCursor === ' ' || charToLeftOfCursor === '\t';
+	const rawFirstNonspaceIdx = generatedMiddle.slice(startIdx).search(/[^\t ]/);
 	if (rawFirstNonspaceIdx > -1 && userHasAddedASpace) {
 		const firstNonspaceIdx = rawFirstNonspaceIdx + startIdx;
 		// console.log('p0', startIdx, rawFirstNonspaceIdx)
-		startIdx = Math.max(startIdx, firstNonspaceIdx)
+		startIdx = Math.max(startIdx, firstNonspaceIdx);
 	}
 
 	// if user is on a blank line and the generation starts with newline(s), remove them
@@ -302,24 +308,24 @@ const postprocessAutocompletion = ({ autocompletionMatchup, autocompletion, pref
 		&& numStartingNewlines > 0
 	) {
 		// console.log('p1', numStartingNewlines)
-		startIdx += numStartingNewlines
+		startIdx += numStartingNewlines;
 	}
 
 	// if the generated FIM text matches with the suffix on the current line, stop
 	if (autocompletion.type === 'single-line-fill-middle' && suffixToTheRightOfCursor.trim()) { // completing in the middle of a line
 		// complete until there is a match
-		const rawMatchIndex = generatedMiddle.slice(startIdx).lastIndexOf(suffixToTheRightOfCursor.trim()[0])
+		const rawMatchIndex = generatedMiddle.slice(startIdx).lastIndexOf(suffixToTheRightOfCursor.trim()[0]);
 		if (rawMatchIndex > -1) {
 			// console.log('p2', rawMatchIndex, startIdx, suffixToTheRightOfCursor.trim()[0], 'AAA', generatedMiddle.slice(startIdx))
 			const matchIdx = rawMatchIndex + startIdx;
-			const matchChar = generatedMiddle[matchIdx]
+			const matchChar = generatedMiddle[matchIdx];
 			if (`{}()[]<>\`'"`.includes(matchChar)) {
-				endIdx = Math.min(endIdx, matchIdx)
+				endIdx = Math.min(endIdx, matchIdx);
 			}
 		}
 	}
 
-	const restOfLineToGenerate = generatedMiddle.slice(startIdx).split(_ln)[0] ?? ''
+	const restOfLineToGenerate = generatedMiddle.slice(startIdx).split(_ln)[0] ?? '';
 	// condition to complete as a single line completion
 	if (
 		prefixToTheLeftOfCursor.trim()
@@ -327,11 +333,11 @@ const postprocessAutocompletion = ({ autocompletionMatchup, autocompletion, pref
 		&& restOfLineToGenerate.trim()
 	) {
 
-		const rawNewlineIdx = generatedMiddle.slice(startIdx).indexOf(_ln)
+		const rawNewlineIdx = generatedMiddle.slice(startIdx).indexOf(_ln);
 		if (rawNewlineIdx > -1) {
 			// console.log('p3', startIdx, rawNewlineIdx)
 			const newlineIdx = rawNewlineIdx + startIdx;
-			endIdx = Math.min(endIdx, newlineIdx)
+			endIdx = Math.min(endIdx, newlineIdx);
 		}
 	}
 
@@ -350,45 +356,45 @@ const postprocessAutocompletion = ({ autocompletionMatchup, autocompletion, pref
 	// }
 
 	// console.log('pFinal', startIdx, endIdx)
-	let completionStr = generatedMiddle.slice(startIdx, endIdx)
+	let completionStr = generatedMiddle.slice(startIdx, endIdx);
 
 	// filter out unbalanced parentheses
-	completionStr = getStringUpToUnbalancedClosingParenthesis(completionStr, prefix)
+	completionStr = getStringUpToUnbalancedClosingParenthesis(completionStr, prefix);
 	// console.log('originalCompletionStr: ', JSON.stringify(generatedMiddle.slice(startIdx)))
 	// console.log('finalCompletionStr: ', JSON.stringify(completionStr))
 
 
-	return completionStr
+	return completionStr;
 
 }
 
 // returns the text in the autocompletion to display, assuming the prefix is already matched
-const toInlineCompletions = ({ autocompletionMatchup, autocompletion, prefixAndSuffix, position, debug }: { autocompletionMatchup: AutocompletionMatchupBounds, autocompletion: Autocompletion, prefixAndSuffix: PrefixAndSuffixInfo, position: Position, debug?: boolean }): { insertText: string, range: Range }[] => {
+const toInlineCompletions = ({ autocompletionMatchup, autocompletion, prefixAndSuffix, position, debug }: { autocompletionMatchup: AutocompletionMatchupBounds; autocompletion: Autocompletion; prefixAndSuffix: PrefixAndSuffixInfo; position: Position; debug?: boolean }): { insertText: string; range: Range }[] => {
 
-	let trimmedInsertText = postprocessAutocompletion({ autocompletionMatchup, autocompletion, prefixAndSuffix, })
-	let rangeToReplace: Range = new Range(position.lineNumber, position.column, position.lineNumber, position.column)
+	let trimmedInsertText = postprocessAutocompletion({ autocompletionMatchup, autocompletion, prefixAndSuffix, });
+	let rangeToReplace: Range = new Range(position.lineNumber, position.column, position.lineNumber, position.column);
 
 	// handle special cases
 
 	// if we redid the suffix, replace the suffix
 	if (autocompletion.type === 'single-line-redo-suffix') {
 
-		const oldSuffix = prefixAndSuffix.suffixToTheRightOfCursor
-		const newSuffix = autocompletion.insertText
+		const oldSuffix = prefixAndSuffix.suffixToTheRightOfCursor;
+		const newSuffix = autocompletion.insertText;
 
 		const [isSubsequence, lastMatchingChar] = getIsSubsequence({ // check that the old text contains the same brackets + symbols as the new text
 			subsequence: removeAllWhitespace(oldSuffix), // old suffix
 			of: removeAllWhitespace(newSuffix), // new suffix
-		})
+		});
 		if (isSubsequence) {
-			rangeToReplace = new Range(position.lineNumber, position.column, position.lineNumber, Number.MAX_SAFE_INTEGER)
+			rangeToReplace = new Range(position.lineNumber, position.column, position.lineNumber, Number.MAX_SAFE_INTEGER);
 		}
 		else {
 
-			const lastMatchupIdx = trimmedInsertText.lastIndexOf(lastMatchingChar)
-			trimmedInsertText = trimmedInsertText.slice(0, lastMatchupIdx + 1)
-			const numCharsToReplace = oldSuffix.lastIndexOf(lastMatchingChar) + 1
-			rangeToReplace = new Range(position.lineNumber, position.column, position.lineNumber, position.column + numCharsToReplace)
+			const lastMatchupIdx = trimmedInsertText.lastIndexOf(lastMatchingChar);
+			trimmedInsertText = trimmedInsertText.slice(0, lastMatchupIdx + 1);
+			const numCharsToReplace = oldSuffix.lastIndexOf(lastMatchingChar) + 1;
+			rangeToReplace = new Range(position.lineNumber, position.column, position.lineNumber, position.column + numCharsToReplace);
 			// console.log('show____', trimmedInsertText, rangeToReplace)
 		}
 	}
@@ -396,7 +402,7 @@ const toInlineCompletions = ({ autocompletionMatchup, autocompletion, prefixAndS
 	return [{
 		insertText: trimmedInsertText,
 		range: rangeToReplace,
-	}]
+	}];
 
 }
 
@@ -422,23 +428,23 @@ const toInlineCompletions = ({ autocompletionMatchup, autocompletion, prefixAndS
 // }
 
 
-type PrefixAndSuffixInfo = { prefix: string, suffix: string, prefixLines: string[], suffixLines: string[], prefixToTheLeftOfCursor: string, suffixToTheRightOfCursor: string }
+type PrefixAndSuffixInfo = { prefix: string; suffix: string; prefixLines: string[]; suffixLines: string[]; prefixToTheLeftOfCursor: string; suffixToTheRightOfCursor: string };
 const getPrefixAndSuffixInfo = (model: ITextModel, position: Position): PrefixAndSuffixInfo => {
 
 	const fullText = model.getValue(EndOfLinePreference.LF);
 
-	const cursorOffset = model.getOffsetAt(position)
-	const prefix = fullText.substring(0, cursorOffset)
-	const suffix = fullText.substring(cursorOffset)
+	const cursorOffset = model.getOffsetAt(position);
+	const prefix = fullText.substring(0, cursorOffset);
+	const suffix = fullText.substring(cursorOffset);
 
 
-	const prefixLines = prefix.split(_ln)
-	const suffixLines = suffix.split(_ln)
+	const prefixLines = prefix.split(_ln);
+	const suffixLines = suffix.split(_ln);
 
-	const prefixToTheLeftOfCursor = prefixLines.slice(-1)[0] ?? ''
-	const suffixToTheRightOfCursor = suffixLines[0] ?? ''
+	const prefixToTheLeftOfCursor = prefixLines.slice(-1)[0] ?? '';
+	const suffixToTheRightOfCursor = suffixLines[0] ?? '';
 
-	return { prefix, suffix, prefixLines, suffixLines, prefixToTheLeftOfCursor, suffixToTheRightOfCursor }
+	return { prefix, suffix, prefixLines, suffixLines, prefixToTheLeftOfCursor, suffixToTheRightOfCursor };
 
 }
 
@@ -446,22 +452,22 @@ const getIndex = (str: string, line: number, char: number) => {
 	return str.split(_ln).slice(0, line).join(_ln).length + (line > 0 ? 1 : 0) + char;
 }
 const getLastLine = (s: string): string => {
-	const matches = s.match(new RegExp(`[^${_ln}]*$`))
-	return matches ? matches[0] : ''
+	const matches = s.match(new RegExp(`[^${_ln}]*$`));
+	return matches ? matches[0] : '';
 }
 
 type AutocompletionMatchupBounds = {
-	startLine: number,
-	startCharacter: number,
-	startIdx: number,
-}
+	startLine: number;
+	startCharacter: number;
+	startIdx: number;
+};
 // returns the startIdx of the match if there is a match, or undefined if there is no match
 // all results are wrt `autocompletion.result`
-const getAutocompletionMatchup = ({ prefix, autocompletion }: { prefix: string, autocompletion: Autocompletion }): AutocompletionMatchupBounds | undefined => {
+const getAutocompletionMatchup = ({ prefix, autocompletion }: { prefix: string; autocompletion: Autocompletion }): AutocompletionMatchupBounds | undefined => {
 
-	const trimmedCurrentPrefix = removeLeftTabsAndTrimEnds(prefix)
-	const trimmedCompletionPrefix = removeLeftTabsAndTrimEnds(autocompletion.prefix)
-	const trimmedCompletionMiddle = removeLeftTabsAndTrimEnds(autocompletion.insertText)
+	const trimmedCurrentPrefix = removeLeftTabsAndTrimEnds(prefix);
+	const trimmedCompletionPrefix = removeLeftTabsAndTrimEnds(autocompletion.prefix);
+	const trimmedCompletionMiddle = removeLeftTabsAndTrimEnds(autocompletion.insertText);
 
 	// console.log('@result: ', JSON.stringify(autocompletion.insertText))
 	// console.log('@trimmedCurrentPrefix: ', JSON.stringify(trimmedCurrentPrefix))
@@ -527,42 +533,42 @@ const getAutocompletionMatchup = ({ prefix, autocompletion }: { prefix: string, 
 
 
 type CompletionOptions = {
-	predictionType: AutocompletionPredictionType,
-	shouldGenerate: boolean,
-	llmPrefix: string,
-	llmSuffix: string,
-	stopTokens: string[],
-}
+	predictionType: AutocompletionPredictionType;
+	shouldGenerate: boolean;
+	llmPrefix: string;
+	llmSuffix: string;
+	stopTokens: string[];
+};
 const getCompletionOptions = (prefixAndSuffix: PrefixAndSuffixInfo, relevantContext: string, justAcceptedAutocompletion: boolean): CompletionOptions => {
 
-	let { prefix, suffix, prefixToTheLeftOfCursor, suffixToTheRightOfCursor, suffixLines, prefixLines } = prefixAndSuffix
+	let { prefix, suffix, prefixToTheLeftOfCursor, suffixToTheRightOfCursor, suffixLines, prefixLines } = prefixAndSuffix;
 
 	// trim prefix and suffix to not be very large
-	suffixLines = suffix.split(_ln).slice(0, 25)
-	prefixLines = prefix.split(_ln).slice(-25)
-	prefix = prefixLines.join(_ln)
-	suffix = suffixLines.join(_ln)
+	suffixLines = suffix.split(_ln).slice(0, 25);
+	prefixLines = prefix.split(_ln).slice(-25);
+	prefix = prefixLines.join(_ln);
+	suffix = suffixLines.join(_ln);
 
-	let completionOptions: CompletionOptions
+	let completionOptions: CompletionOptions;
 
 	// if line is empty, do multiline completion
-	const isLineEmpty = !prefixToTheLeftOfCursor.trim() && !suffixToTheRightOfCursor.trim()
-	const isLinePrefixEmpty = removeAllWhitespace(prefixToTheLeftOfCursor).length === 0
-	const isLineSuffixEmpty = removeAllWhitespace(suffixToTheRightOfCursor).length === 0
+	const isLineEmpty = !prefixToTheLeftOfCursor.trim() && !suffixToTheRightOfCursor.trim();
+	const isLinePrefixEmpty = removeAllWhitespace(prefixToTheLeftOfCursor).length === 0;
+	const isLineSuffixEmpty = removeAllWhitespace(suffixToTheRightOfCursor).length === 0;
 
 	// TODO add context to prefix
 	// llmPrefix = '\n\n/* Relevant context:\n' + relevantContext + '\n*/\n' + llmPrefix
 
 	// if we just accepted an autocompletion, predict a multiline completion starting on the next line
 	if (justAcceptedAutocompletion && isLineSuffixEmpty) {
-		const prefixWithNewline = prefix + _ln
+		const prefixWithNewline = prefix + _ln;
 		completionOptions = {
 			predictionType: 'multi-line-start-on-next-line',
 			shouldGenerate: true,
 			llmPrefix: prefixWithNewline,
 			llmSuffix: suffix,
 			stopTokens: [`${_ln}${_ln}`] // double newlines
-		}
+		};
 	}
 	// if the current line is empty, predict a single-line completion
 	else if (isLineEmpty) {
@@ -572,19 +578,19 @@ const getCompletionOptions = (prefixAndSuffix: PrefixAndSuffixInfo, relevantCont
 			llmPrefix: prefix,
 			llmSuffix: suffix,
 			stopTokens: allLinebreakSymbols
-		}
+		};
 	}
 	// if suffix is 3 or fewer characters, attempt to complete the line ignorning it
 	else if (removeAllWhitespace(suffixToTheRightOfCursor).length <= 3) {
-		const suffixLinesIgnoringThisLine = suffixLines.slice(1)
-		const suffixStringIgnoringThisLine = suffixLinesIgnoringThisLine.length === 0 ? '' : _ln + suffixLinesIgnoringThisLine.join(_ln)
+		const suffixLinesIgnoringThisLine = suffixLines.slice(1);
+		const suffixStringIgnoringThisLine = suffixLinesIgnoringThisLine.length === 0 ? '' : _ln + suffixLinesIgnoringThisLine.join(_ln);
 		completionOptions = {
 			predictionType: 'single-line-redo-suffix',
 			shouldGenerate: true,
 			llmPrefix: prefix,
 			llmSuffix: suffixStringIgnoringThisLine,
 			stopTokens: allLinebreakSymbols
-		}
+		};
 	}
 	// else attempt to complete the middle of the line if there is a prefix (the completion looks bad if there is no prefix)
 	else if (!isLinePrefixEmpty) {
@@ -594,7 +600,7 @@ const getCompletionOptions = (prefixAndSuffix: PrefixAndSuffixInfo, relevantCont
 			llmPrefix: prefix,
 			llmSuffix: suffix,
 			stopTokens: allLinebreakSymbols
-		}
+		};
 	} else {
 		completionOptions = {
 			predictionType: 'do-not-predict',
@@ -602,10 +608,10 @@ const getCompletionOptions = (prefixAndSuffix: PrefixAndSuffixInfo, relevantCont
 			llmPrefix: prefix,
 			llmSuffix: suffix,
 			stopTokens: []
-		}
+		};
 	}
 
-	return completionOptions
+	return completionOptions;
 
 }
 

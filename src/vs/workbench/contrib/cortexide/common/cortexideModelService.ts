@@ -60,6 +60,11 @@ class CortexideModelService extends Disposable implements ICortexideModelService
 				return;
 			}
 
+			// Only process file:// URIs - skip other schemes like vscode-scm:, untitled:, etc.
+			if (uri.scheme !== 'file') {
+				return;
+			}
+
 			const fsPath = uri.fsPath;
 
 			// Check cache first
