@@ -1,0 +1,31 @@
+@@ -94,4 +90,29 @@
+ 	protected doCheckForUpdates(context: any): void {
++		if (!this.url) {
++			return;
++		}
++
+ 		this.setState(State.CheckingForUpdates(context));
+-		electron.autoUpdater.checkForUpdates();
++
++		this.requestService.request({ url: this.url }, CancellationToken.None)
++			.then<IUpdate | null>(asJson)
++			.then(update => {
++				if (!update || !update.url || !update.version || !update.productVersion) {
++					this.setState(State.Idle(UpdateType.Setup));
++
++					return Promise.resolve(null);
++				}
++
++				const fetchedVersion = /\d+\.\d+\.\d+\.\d+/.test(update.productVersion) ? update.productVersion.replace(/(\d+\.\d+\.\d+)\.\d+(\-\w+)?/, '$1$2') : update.productVersion.replace(/(\d+\.\d+\.)0+(\d+)(\-\w+)?/, '$1$2$3')
++				const currentVersion = this.productService.version.replace(/(\d+\.\d+\.)0+(\d+)(\-\w+)?/, '$1$2$3')
++
++				if(semver.compareBuild(currentVersion, fetchedVersion) >= 0) {
++					this.setState(State.Idle(UpdateType.Setup));
++				}
++				else {
++					electron.autoUpdater.checkForUpdates();
++				}
++
++				return Promise.resolve(null);
++			})
+ 	}
