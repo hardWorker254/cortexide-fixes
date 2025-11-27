@@ -1723,6 +1723,7 @@ export default tseslint.config(
 						'@vscode/ripgrep',
 						'@vscode/iconv-lite-umd',
 						'@vscode/policy-watcher',
+						'@vscodium/policy-watcher',
 						'@vscode/proxy-agent',
 						'@vscode/spdlog',
 						'@vscode/windows-process-tree',
