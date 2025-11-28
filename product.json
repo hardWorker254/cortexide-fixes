@@ -1,8 +1,8 @@
 {
 	"nameShort": "CortexIDE",
 	"nameLong": "CortexIDE",
-	"cortexVersion": "0.0.1",
-	"cortexRelease": "0001",
+	"cortexVersion": "0.0.3",
+	"cortexRelease": "0003",
 	"applicationName": "cortexide",
 	"dataFolderName": ".cortexide",
 	"win32MutexName": "cortexide",
@@ -26,6 +26,14 @@
 	"win32ShellNameShort": "CortexIDE",
 	"win32TunnelServiceMutex": "cortexide-tunnelservice",
 	"win32TunnelMutex": "cortexide-tunnel",
+	"win32ContextMenu": {
+		"x64": {
+			"clsid": "{6B6B4E5C-7B3A-4C5D-8E9F-1A2B3C4D5E6F}"
+		},
+		"arm64": {
+			"clsid": "{7C7C5F6D-8C4B-5D6E-9F0A-2B3C4D5E6F7A}"
+		}
+	},
 	"darwinBundleIdentifier": "com.cortexide.code",
 	"linuxIconName": "cortexide",
 	"licenseFileName": "LICENSE.txt",
