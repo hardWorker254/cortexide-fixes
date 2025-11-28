@@ -74,7 +74,7 @@ export class DarwinUpdateService extends AbstractUpdateService implements IRelau
 	}
 
 	protected buildUpdateFeedUrl(quality: string): string | undefined {
-		const url = createUpdateURL(this.productService, quality, process.platform, process.arch);
+		const url = createUpdateURL(process.platform, quality, this.productService);
 		try {
 			electron.autoUpdater.setFeedURL({ url });
 		} catch (e) {
