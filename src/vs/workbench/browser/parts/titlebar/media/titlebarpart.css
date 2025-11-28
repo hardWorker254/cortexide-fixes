@@ -232,10 +232,17 @@
 	min-width: 36px;
 	flex-wrap: nowrap;
 	order: 2;
+	height: 100%;
+	align-items: center;
 }
 
 .monaco-workbench.web .part.titlebar > .titlebar-container > .titlebar-left > .menubar {
 	margin-left: 4px;
+}
+
+.monaco-workbench.windows .part.titlebar > .titlebar-container > .titlebar-left > .menubar > .menubar-menu-button {
+	height: 100%;
+	line-height: 22px;
 }
 
 .monaco-workbench .part.titlebar > .titlebar-container.counter-zoom .menubar .menubar-menu-button > .menubar-menu-items-holder.monaco-menu-container,
