@@ -13,12 +13,10 @@ import { IEnvironmentMainService } from '../../environment/electron-main/environ
 import { ILifecycleMainService, IRelaunchHandler, IRelaunchOptions } from '../../lifecycle/electron-main/lifecycleMainService.js';
 import { ILogService } from '../../log/common/log.js';
 import { IProductService } from '../../product/common/productService.js';
-import { IRequestService, asJson } from '../../request/common/request.js';
+import { IRequestService } from '../../request/common/request.js';
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
 import { IUpdate, State, StateType, UpdateType } from '../common/update.js';
 import { AbstractUpdateService, createUpdateURL, UpdateErrorClassification } from './abstractUpdateService.js';
-import { CancellationToken } from '../../../base/common/cancellation.js';
-import * as semver from 'semver';
 
 export class DarwinUpdateService extends AbstractUpdateService implements IRelaunchHandler {
 
