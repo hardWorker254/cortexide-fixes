@@ -1,8 +1,8 @@
 {
 	"nameShort": "CortexIDE",
 	"nameLong": "CortexIDE",
-	"cortexVersion": "0.0.3",
-	"cortexRelease": "0003",
+	"cortexVersion": "0.0.4",
+	"cortexRelease": "0200",
 	"applicationName": "cortexide",
 	"dataFolderName": ".cortexide",
 	"win32MutexName": "cortexide",
