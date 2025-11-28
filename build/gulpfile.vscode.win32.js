@@ -111,11 +111,13 @@ function buildWin32Setup(arch, target) {
 			Quality: quality
 		};
 
-		if (quality !== 'exploration') {
-			definitions['AppxPackage'] = `${quality === 'stable' ? 'code' : 'code_insider'}_${arch}.appx`;
-			definitions['AppxPackageDll'] = `${quality === 'stable' ? 'code' : 'code_insider'}_explorer_command_${arch}.dll`;
-			definitions['AppxPackageName'] = `${product.win32AppUserModelId}`;
-		}
+		// CortexIDE: Disable APPX packaging (Windows Store packages)
+		// APPX packages are not needed for CortexIDE distribution
+		// if (quality !== 'exploration') {
+		// 	definitions['AppxPackage'] = `${quality === 'stable' ? 'code' : 'code_insider'}_${arch}.appx`;
+		// 	definitions['AppxPackageDll'] = `${quality === 'stable' ? 'code' : 'code_insider'}_explorer_command_${arch}.dll`;
+		// 	definitions['AppxPackageName'] = `${product.win32AppUserModelId}`;
+		// }
 
 		packageInnoSetup(issPath, { definitions }, cb);
 	};
