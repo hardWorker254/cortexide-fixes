@@ -31,7 +31,7 @@ const linuxPackageRevision = Math.floor(new Date().getTime() / 1000);
  * @param {string} arch
  */
 function getDebPackageArch(arch) {
-	return { x64: 'amd64', armhf: 'armhf', arm64: 'arm64' }[arch];
+	return { x64: 'amd64', armhf: 'armhf', arm64: 'arm64', ppc64le: 'ppc64el', riscv64: 'riscv64', loong64: 'loong64' }[arch];
 }
 
 function prepareDebPackage(arch) {
@@ -145,7 +145,7 @@ function getRpmBuildPath(rpmArch) {
  * @param {string} arch
  */
 function getRpmPackageArch(arch) {
-	return { x64: 'x86_64', armhf: 'armv7hl', arm64: 'aarch64' }[arch];
+	return { x64: 'x86_64', armhf: 'armv7hl', arm64: 'aarch64', ppc64le: 'ppc64le', riscv64: 'riscv64', loong64: 'loong64' }[arch];
 }
 
 /**
@@ -303,6 +303,9 @@ const BUILD_TARGETS = [
 	{ arch: 'x64' },
 	{ arch: 'armhf' },
 	{ arch: 'arm64' },
+	{ arch: 'ppc64le' },
+	{ arch: 'riscv64' },
+	{ arch: 'loong64' },
 ];
 
 BUILD_TARGETS.forEach(({ arch }) => {
