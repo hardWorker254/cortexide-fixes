@@ -1129,6 +1129,16 @@ const xAIModelOptions = {
 		specialToolFormat: 'openai-style',
 		reasoningCapabilities: { supportsReasoning: true, canTurnOffReasoning: false, canIOReasoning: false, reasoningSlider: { type: 'effort_slider', values: ['low', 'high'], default: 'low' } },
 	},
+	'grok-2': {
+		contextWindow: 131_072,
+		reservedOutputTokenSpace: null,
+		cost: { input: 2.00, output: 10.00 },
+		downloadable: false,
+		supportsFIM: false,
+		supportsSystemMessage: 'system-role',
+		specialToolFormat: 'openai-style',
+		reasoningCapabilities: false,
+	},
 } as const satisfies { [s: string]: CortexideStaticModelInfo }
 
 const xAISettings: VoidStaticProviderInfo = {
