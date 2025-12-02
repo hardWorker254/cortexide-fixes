@@ -15,7 +15,8 @@ import { ICortexideSettingsService } from '../common/cortexideSettingsService.js
 import { IConvertToLLMMessageService } from './convertToLLMMessageService.js'
 import { ILLMMessageService } from '../common/sendLLMMessageService.js'
 import { ModelSelection, OverridesOfModel, ModelSelectionOptions } from '../common/cortexideSettingsTypes.js'
-import { gitCommitMessage_systemMessage, gitCommitMessage_userMessage } from '../common/prompt/prompts.js'
+import { gitCommitMessage_systemMessage, gitCommitMessage_systemMessage_local, gitCommitMessage_userMessage } from '../common/prompt/prompts.js'
+import { isLocalProvider } from './convertToLLMMessageService.js'
 import { LLMChatMessage } from '../common/sendLLMMessageTypes.js'
 import { generateUuid } from '../../../../base/common/uuid.js'
 import { ThrottledDelayer } from '../../../../base/common/async.js'
@@ -97,10 +98,14 @@ class GenerateCommitMessageService extends Disposable implements IGenerateCommit
 
 				const prompt = gitCommitMessage_userMessage(stat, sampledDiffs, branch, log)
 
+				// Use local variant for local models to reduce token usage
+				const isLocal = modelSelection && modelSelection.providerName !== 'auto' && isLocalProvider(modelSelection.providerName, this.cortexideSettingsService.state.settingsOfProvider)
+				const systemMessage = isLocal ? gitCommitMessage_systemMessage_local : gitCommitMessage_systemMessage
+
 				const simpleMessages = [{ role: 'user', content: prompt } as const]
 				const { messages, separateSystemMessage } = this.convertToLLMMessageService.prepareLLMSimpleMessages({
 					simpleMessages,
-					systemMessage: gitCommitMessage_systemMessage,
+					systemMessage,
 					modelSelection: modelOptions.modelSelection,
 					featureName: 'SCM',
 				})

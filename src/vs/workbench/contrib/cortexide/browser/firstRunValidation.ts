@@ -56,6 +56,13 @@ export class FirstRunValidationContribution extends Disposable implements IWorkb
 		};
 
 		console.error = (...args: any[]) => {
+			// Suppress non-fatal Web Locks API errors (they occur during initialization when context isn't fully ready)
+			const errorMessage = args.map(arg => typeof arg === 'string' ? arg : String(arg)).join(' ');
+			if (errorMessage.includes('lock() request could not be registered') ||
+				errorMessage.includes('InvalidStateError') && errorMessage.includes('lock')) {
+				// Suppress this non-fatal error - it's a known issue with Web Locks API during initialization
+				return;
+			}
 			const redacted = this.secretDetectionService.redactSecretsInObject(args);
 			originalError(...(redacted.hasSecrets ? redacted.redacted : args));
 		};

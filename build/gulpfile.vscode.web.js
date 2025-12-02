@@ -42,6 +42,9 @@ const vscodeWebResourceIncludes = [
 	// Welcome
 	'out-build/vs/workbench/contrib/welcomeGettingStarted/common/media/**/*.{svg,png}',
 
+	// Workbench Media (logo, icons)
+	'out-build/vs/workbench/browser/media/**/*.{svg,png}',
+
 	// Extensions
 	'out-build/vs/workbench/contrib/extensions/browser/media/{theme-icon.png,language-icon.svg}',
 	'out-build/vs/workbench/services/extensionManagement/common/media/*.{svg,png}',

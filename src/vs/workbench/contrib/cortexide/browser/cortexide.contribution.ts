@@ -126,6 +126,9 @@ import '../common/cortexideUpdateService.js'
 // model service
 import '../common/cortexideModelService.js'
 
+// model warm-up service
+import '../common/modelWarmupService.js'
+
 // ollama installer service (main-process proxy)
 import '../common/ollamaInstallerService.js'
 

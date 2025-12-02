@@ -15,6 +15,8 @@ Use AI agents on your codebase, checkpoint and visualize changes, and bring any 
 
 This repo contains the full sourcecode for CortexIDE. If you're new, welcome!
 
+📊 **See**: [CortexIDE vs Cursor, Void, Antigravity, Continue.dev — Full Comparison](docs/CortexIDE-vs-Other-AI-Editors.md)
+
 - 🧭 [Website](https://opencortexide.com)
 
 - 👋 [Discord](https://discord.gg/pb4z4vtb)

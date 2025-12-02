@@ -15,7 +15,7 @@ import { GoogleAuth } from 'google-auth-library'
 /* eslint-enable */
 
 import { GeminiLLMChatMessage, LLMChatMessage, LLMFIMMessage, ModelListParams, OllamaModelResponse, OnError, OnFinalMessage, OnText, RawToolCallObj, RawToolParamsObj } from '../../common/sendLLMMessageTypes.js';
-import { ChatMode, displayInfoOfProviderName, ModelSelectionOptions, OverridesOfModel, ProviderName, SettingsOfProvider } from '../../common/cortexideSettingsTypes.js';
+import { ChatMode, displayInfoOfProviderName, FeatureName, ModelSelectionOptions, OverridesOfModel, ProviderName, SettingsOfProvider } from '../../common/cortexideSettingsTypes.js';
 import { getSendableReasoningInfo, getModelCapabilities, getProviderCapabilities, defaultProviderSettings, getReservedOutputTokenSpace } from '../../common/modelCapabilities.js';
 import { extractReasoningWrapper, extractXMLToolsWrapper } from './extractGrammar.js';
 import { availableTools, InternalToolInfo } from '../../common/prompt/prompts.js';
@@ -50,15 +50,118 @@ type SendChatParams_Internal = InternalCommonMessageParams & {
 	chatMode: ChatMode | null;
 	mcpTools: InternalToolInfo[] | undefined;
 }
-type SendFIMParams_Internal = InternalCommonMessageParams & { messages: LLMFIMMessage; separateSystemMessage: string | undefined; }
+type SendFIMParams_Internal = InternalCommonMessageParams & { messages: LLMFIMMessage; separateSystemMessage: string | undefined; featureName?: FeatureName; }
 export type ListParams_Internal<ModelResponse> = ModelListParams<ModelResponse>
 
 
 const invalidApiKeyMessage = (providerName: ProviderName) => `Invalid ${displayInfoOfProviderName(providerName).title} API key.`
 
+// ------------ SDK POOLING FOR LOCAL PROVIDERS ------------
+
+/**
+ * In-memory cache for OpenAI-compatible SDK clients (for local providers only).
+ * Keyed by: `${providerName}:${endpoint}:${apiKeyHash}`
+ * This avoids recreating clients on every request, improving connection reuse.
+ */
+const openAIClientCache = new Map<string, OpenAI>()
+
+/**
+ * In-memory cache for Ollama SDK clients.
+ * Keyed by: `${endpoint}`
+ */
+const ollamaClientCache = new Map<string, Ollama>()
+
+/**
+ * Simple hash function for API keys (for cache key generation).
+ * Only used for local providers where security is less critical.
+ */
+const hashApiKey = (apiKey: string | undefined): string => {
+	if (!apiKey) return 'noop'
+	// Simple hash - just use first 8 chars for cache key (not for security)
+	return apiKey.substring(0, 8)
+}
+
+/**
+ * Build cache key for OpenAI-compatible client.
+ * Format: `${providerName}:${endpoint}:${apiKeyHash}`
+ */
+const buildOpenAICacheKey = (providerName: ProviderName, settingsOfProvider: SettingsOfProvider): string => {
+	let endpoint = ''
+	let apiKey = 'noop'
+
+	if (providerName === 'openAI') {
+		apiKey = settingsOfProvider[providerName]?.apiKey || ''
+	} else if (providerName === 'ollama' || providerName === 'vLLM' || providerName === 'lmStudio') {
+		endpoint = settingsOfProvider[providerName]?.endpoint || ''
+	} else if (providerName === 'openAICompatible' || providerName === 'liteLLM') {
+		endpoint = settingsOfProvider[providerName]?.endpoint || ''
+		apiKey = settingsOfProvider[providerName]?.apiKey || ''
+	}
+
+	return `${providerName}:${endpoint}:${hashApiKey(apiKey)}`
+}
+
+/**
+ * Get or create OpenAI-compatible client with caching for local providers.
+ * For local providers (ollama, vLLM, lmStudio, localhost openAICompatible/liteLLM),
+ * we cache clients to reuse connections. Cloud providers always get new instances.
+ */
+const getOpenAICompatibleClient = async ({ settingsOfProvider, providerName, includeInPayload }: { settingsOfProvider: SettingsOfProvider, providerName: ProviderName, includeInPayload?: { [s: string]: any } }): Promise<OpenAI> => {
+	// Detect if this is a local provider
+	const isExplicitLocalProvider = providerName === 'ollama' || providerName === 'vLLM' || providerName === 'lmStudio'
+	let isLocalhostEndpoint = false
+	if (providerName === 'openAICompatible' || providerName === 'liteLLM') {
+		const endpoint = settingsOfProvider[providerName]?.endpoint || ''
+		if (endpoint) {
+			try {
+				const url = new URL(endpoint)
+				const hostname = url.hostname.toLowerCase()
+				isLocalhostEndpoint = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '::1'
+			} catch (e) {
+				isLocalhostEndpoint = false
+			}
+		}
+	}
+	const isLocalProvider = isExplicitLocalProvider || isLocalhostEndpoint
+
+	// Only cache for local providers
+	if (isLocalProvider) {
+		const cacheKey = buildOpenAICacheKey(providerName, settingsOfProvider)
+		const cached = openAIClientCache.get(cacheKey)
+		if (cached) {
+			return cached
+		}
+	}
+
+	// Create new client (will cache if local)
+	const client = await newOpenAICompatibleSDK({ settingsOfProvider, providerName, includeInPayload })
+
+	// Cache if local provider
+	if (isLocalProvider) {
+		const cacheKey = buildOpenAICacheKey(providerName, settingsOfProvider)
+		openAIClientCache.set(cacheKey, client)
+	}
+
+	return client
+}
+
+/**
+ * Get or create Ollama client with caching.
+ */
+const getOllamaClient = ({ endpoint }: { endpoint: string }): Ollama => {
+	if (!endpoint) throw new Error(`Ollama Endpoint was empty (please enter ${defaultProviderSettings.ollama.endpoint} in CortexIDE Settings if you want the default url).`)
+
+	const cached = ollamaClientCache.get(endpoint)
+	if (cached) {
+		return cached
+	}
+
+	const ollama = new Ollama({ host: endpoint })
+	ollamaClientCache.set(endpoint, ollama)
+	return ollama
+}
+
 // ------------ OPENAI-COMPATIBLE (HELPERS) ------------
-
-
 
 const parseHeadersJSON = (s: string | undefined): Record<string, string | null | undefined> | undefined => {
 	if (!s) return undefined
@@ -69,15 +172,62 @@ const parseHeadersJSON = (s: string | undefined): Record<string, string | null |
 	}
 }
 
+/**
+ * Compute max_tokens/num_predict for local providers based on feature.
+ * For local models, we use smaller token limits to reduce latency:
+ * - Autocomplete: 64-96 tokens (very small, fast completions)
+ * - Ctrl+K / Apply: 150-250 tokens (small edits)
+ * - Other/Cloud: 300 tokens (default)
+ */
+const computeMaxTokensForLocalProvider = (isLocalProvider: boolean, featureName: FeatureName | undefined): number => {
+	if (!isLocalProvider) {
+		return 300 // Default for cloud providers
+	}
+
+	// Infer feature from featureName or default to safe value
+	if (featureName === 'Autocomplete') {
+		return 96 // Small value for fast autocomplete
+	} else if (featureName === 'Ctrl+K' || featureName === 'Apply') {
+		return 200 // Medium value for quick edits
+	}
+
+	// Default for local providers when featureName is unknown
+	return 300
+}
+
 const newOpenAICompatibleSDK = async ({ settingsOfProvider, providerName, includeInPayload }: { settingsOfProvider: SettingsOfProvider, providerName: ProviderName, includeInPayload?: { [s: string]: any } }) => {
 	// Network optimizations: timeouts and connection reuse
 	// The OpenAI SDK handles HTTP keep-alive and connection pooling internally
+	// Use shorter timeout for local models (they're on localhost, should be fast)
+
+	// Detect local providers: explicit local providers + localhost endpoints
+	const isExplicitLocalProvider = providerName === 'ollama' || providerName === 'vLLM' || providerName === 'lmStudio'
+	let isLocalhostEndpoint = false
+	if (providerName === 'openAICompatible' || providerName === 'liteLLM') {
+		const endpoint = settingsOfProvider[providerName]?.endpoint || ''
+		if (endpoint) {
+			try {
+				// Use proper URL parsing to check hostname (not substring matching)
+				const url = new URL(endpoint)
+				const hostname = url.hostname.toLowerCase()
+				isLocalhostEndpoint = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '::1'
+			} catch (e) {
+				// Invalid URL - assume non-local (safe default)
+				isLocalhostEndpoint = false
+			}
+		}
+	}
+	const isLocalProvider = isExplicitLocalProvider || isLocalhostEndpoint
+
+	const timeoutMs = isLocalProvider ? 30_000 : 60_000 // 30s for local, 60s for remote
 	const commonPayloadOpts: ClientOptions = {
 		dangerouslyAllowBrowser: true,
-		timeout: 60_000, // 60s timeout for API calls
-		maxRetries: 2, // Fast retries for transient errors
+		timeout: timeoutMs,
+		maxRetries: 1, // Reduce retries for local models (they fail fast if not available)
 		// Enable HTTP/2 and connection reuse for better performance
-		httpAgent: undefined, // Let SDK handle connection pooling
+		// For localhost, connection reuse is especially important to avoid TCP handshake overhead
+		// The OpenAI SDK uses keep-alive by default, which is optimal for localhost
+		httpAgent: undefined, // Let SDK handle connection pooling (optimized for localhost)
 		...includeInPayload,
 	}
 	if (providerName === 'openAI') {
@@ -178,7 +328,7 @@ const newOpenAICompatibleSDK = async ({ settingsOfProvider, providerName, includ
 }
 
 
-const _sendOpenAICompatibleFIM = async ({ messages: { prefix, suffix, stopTokens }, onFinalMessage, onError, settingsOfProvider, modelName: modelName_, _setAborter, providerName, overridesOfModel }: SendFIMParams_Internal) => {
+const _sendOpenAICompatibleFIM = async ({ messages: { prefix, suffix, stopTokens }, onFinalMessage, onError, settingsOfProvider, modelName: modelName_, _setAborter, providerName, overridesOfModel, onText, featureName }: SendFIMParams_Internal) => {
 
 	const {
 		modelName,
@@ -194,23 +344,102 @@ const _sendOpenAICompatibleFIM = async ({ messages: { prefix, suffix, stopTokens
 		return
 	}
 
-	const openai = await newOpenAICompatibleSDK({ providerName, settingsOfProvider, includeInPayload: additionalOpenAIPayload })
-	openai.completions
-		.create({
+	// Detect if this is a local provider for streaming optimization
+	const isExplicitLocalProvider = providerName === 'ollama' || providerName === 'vLLM' || providerName === 'lmStudio'
+	let isLocalhostEndpoint = false
+	if (providerName === 'openAICompatible' || providerName === 'liteLLM') {
+		const endpoint = settingsOfProvider[providerName]?.endpoint || ''
+		if (endpoint) {
+			try {
+				// Use proper URL parsing to check hostname (not substring matching)
+				const url = new URL(endpoint)
+				const hostname = url.hostname.toLowerCase()
+				isLocalhostEndpoint = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '::1'
+			} catch (e) {
+				// Invalid URL - assume non-local (safe default)
+				isLocalhostEndpoint = false
+			}
+		}
+	}
+	const isLocalProvider = isExplicitLocalProvider || isLocalhostEndpoint
+
+	const openai = await getOpenAICompatibleClient({ providerName, settingsOfProvider, includeInPayload: additionalOpenAIPayload })
+
+	// Compute max_tokens based on feature and provider type
+	const maxTokensForThisCall = computeMaxTokensForLocalProvider(isLocalProvider, featureName)
+
+	// For local models, use streaming FIM for better responsiveness
+	// Only stream if onText is provided and not empty (some consumers like autocomplete have empty onText)
+	if (isLocalProvider && onText && typeof onText === 'function') {
+		let fullText = ''
+		let firstTokenReceived = false
+		const firstTokenTimeout = 10_000 // 10 seconds for first token on local models
+
+		const stream = await openai.completions.create({
 			model: modelName,
 			prompt: prefix,
 			suffix: suffix,
 			stop: stopTokens,
-			max_tokens: 300,
+			max_tokens: maxTokensForThisCall,
+			stream: true,
 		})
-		.then(async response => {
-			const fullText = response.choices[0]?.text
+
+		_setAborter(() => stream.controller?.abort())
+
+		// Set up first token timeout for local models
+		const firstTokenTimeoutId = setTimeout(() => {
+			if (!firstTokenReceived) {
+				stream.controller?.abort()
+				onError({
+					message: 'Local model took too long to respond for autocomplete. Try a smaller model or a cloud model.',
+					fullError: null
+				})
+			}
+		}, firstTokenTimeout)
+
+		try {
+			for await (const chunk of stream) {
+				// Mark first token received
+				if (!firstTokenReceived) {
+					firstTokenReceived = true
+					clearTimeout(firstTokenTimeoutId)
+				}
+
+				const newText = chunk.choices[0]?.text ?? ''
+				fullText += newText
+				onText({
+					fullText,
+					fullReasoning: '',
+					toolCall: undefined,
+				})
+			}
+
+			// Clear timeout on successful completion
+			clearTimeout(firstTokenTimeoutId)
 			onFinalMessage({ fullText, fullReasoning: '', anthropicReasoning: null });
-		})
-		.catch(error => {
-			if (error instanceof OpenAI.APIError && error.status === 401) { onError({ message: invalidApiKeyMessage(providerName), fullError: error }); }
-			else { onError({ message: error + '', fullError: error }); }
-		})
+		} catch (streamError) {
+			clearTimeout(firstTokenTimeoutId)
+			onError({ message: streamError + '', fullError: streamError instanceof Error ? streamError : new Error(String(streamError)) });
+		}
+	} else {
+		// Non-streaming for remote models (fallback)
+		openai.completions
+			.create({
+				model: modelName,
+				prompt: prefix,
+				suffix: suffix,
+				stop: stopTokens,
+				max_tokens: maxTokensForThisCall,
+			})
+			.then(async response => {
+				const fullText = response.choices[0]?.text
+				onFinalMessage({ fullText, fullReasoning: '', anthropicReasoning: null });
+			})
+			.catch(error => {
+				if (error instanceof OpenAI.APIError && error.status === 401) { onError({ message: invalidApiKeyMessage(providerName), fullError: error }); }
+				else { onError({ message: error + '', fullError: error }); }
+			})
+	}
 }
 
 
@@ -302,7 +531,7 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 		: {}
 
 	// instance
-	const openai: OpenAI = await newOpenAICompatibleSDK({ providerName, settingsOfProvider, includeInPayload })
+	const openai: OpenAI = await getOpenAICompatibleClient({ providerName, settingsOfProvider, includeInPayload })
 	if (providerName === 'microsoftAzure') {
 		// Required to select the model
 		(openai as AzureOpenAI).deploymentName = modelName;
@@ -332,15 +561,89 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 	let toolParamsStr = ''
 	let isRetrying = false // Flag to prevent processing streaming chunks during retry
 
+	// Detect if this is a local provider for timeout optimization
+	const isExplicitLocalProviderChat = providerName === 'ollama' || providerName === 'vLLM' || providerName === 'lmStudio'
+	let isLocalhostEndpointChat = false
+	if (providerName === 'openAICompatible' || providerName === 'liteLLM') {
+		const endpoint = settingsOfProvider[providerName]?.endpoint || ''
+		if (endpoint) {
+			try {
+				const url = new URL(endpoint)
+				const hostname = url.hostname.toLowerCase()
+				isLocalhostEndpointChat = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '::1'
+			} catch (e) {
+				isLocalhostEndpointChat = false
+			}
+		}
+	}
+	const isLocalChat = isExplicitLocalProviderChat || isLocalhostEndpointChat
+
 	// Helper function to process streaming response
 	const processStreamingResponse = async (response: any) => {
 		_setAborter(() => response.controller.abort())
+
+		// For local models, add hard timeout with partial results
+		const overallTimeout = isLocalChat ? 20_000 : 120_000 // 20s for local, 120s for remote
+		const firstTokenTimeout = isLocalChat ? 10_000 : 30_000 // 10s for first token on local
+
+		let firstTokenReceived = false
+
+		// Set up overall timeout
+		const timeoutId = setTimeout(() => {
+			if (fullTextSoFar || fullReasoningSoFar || toolName) {
+				// We have partial results - commit them
+				const toolCall = rawToolCallObjOfParamsStr(toolName, toolParamsStr, toolId)
+				const toolCallObj = toolCall ? { toolCall } : {}
+				onFinalMessage({
+					fullText: fullTextSoFar,
+					fullReasoning: fullReasoningSoFar,
+					anthropicReasoning: null,
+					...toolCallObj
+				})
+				// Note: We don't call onError here since we have partial results
+			} else {
+				// No tokens received - abort
+				response.controller?.abort()
+				onError({
+					message: isLocalChat
+						? 'Local model timed out. Try a smaller model or use a cloud model for this task.'
+						: 'Request timed out.',
+					fullError: null
+				})
+			}
+		}, overallTimeout)
+
+		// Set up first token timeout (only for local models)
+		let firstTokenTimeoutId: ReturnType<typeof setTimeout> | null = null
+		if (isLocalChat) {
+			firstTokenTimeoutId = setTimeout(() => {
+				if (!firstTokenReceived) {
+					response.controller?.abort()
+					onError({
+						message: 'Local model is too slow (no response after 10s). Try a smaller/faster model or use a cloud model.',
+						fullError: null
+					})
+				}
+			}, firstTokenTimeout)
+		}
+
 		try {
 			// when receive text
 			for await (const chunk of response) {
 				// Check if we're retrying (another response is being processed)
 				if (isRetrying) {
+					clearTimeout(timeoutId)
+					if (firstTokenTimeoutId) clearTimeout(firstTokenTimeoutId)
 					return // Stop processing this streaming response, retry is in progress
+				}
+
+				// Mark first token received
+				if (!firstTokenReceived) {
+					firstTokenReceived = true
+					if (firstTokenTimeoutId) {
+						clearTimeout(firstTokenTimeoutId)
+						firstTokenTimeoutId = null
+					}
 				}
 
 				// message
@@ -374,6 +677,11 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 				})
 
 			}
+
+			// Clear timeouts on successful completion
+			clearTimeout(timeoutId)
+			if (firstTokenTimeoutId) clearTimeout(firstTokenTimeoutId)
+
 			// on final
 			if (!fullTextSoFar && !fullReasoningSoFar && !toolName) {
 				onError({ message: 'CortexIDE: Response from model was empty.', fullError: null })
@@ -384,6 +692,8 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 				onFinalMessage({ fullText: fullTextSoFar, fullReasoning: fullReasoningSoFar, anthropicReasoning: null, ...toolCallObj });
 			}
 		} catch (streamError) {
+			clearTimeout(timeoutId)
+			if (firstTokenTimeoutId) clearTimeout(firstTokenTimeoutId)
 			// If error occurs during streaming, re-throw to be caught by outer catch handler
 			throw streamError
 		}
@@ -517,6 +827,63 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 					return
 				}
 			}
+			// Check if this is a "model does not support tools" error (e.g., from Ollama)
+			else if (error instanceof OpenAI.APIError &&
+				error.status === 400 &&
+				(error.message?.toLowerCase().includes('does not support tools') ||
+					error.message?.toLowerCase().includes('tool') && error.message?.toLowerCase().includes('not support'))) {
+
+				// Set retry flag to stop processing any remaining streaming chunks
+				isRetrying = true
+
+				// Reset state variables before retrying to prevent duplicate content
+				fullTextSoFar = ''
+				fullReasoningSoFar = ''
+				toolName = ''
+				toolId = ''
+				toolParamsStr = ''
+
+				// Retry without tools - this model doesn't support native tool calling
+				// Fall back to XML-based tool calling or regular chat
+				// CRITICAL: Retry immediately without delay for tool support errors (they're fast to detect)
+				const optionsWithoutTools: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+					model: modelName,
+					messages: messages as any,
+					stream: true,
+					// Explicitly omit tools - don't include nativeToolsObj
+					...additionalOpenAIPayload
+				}
+
+				try {
+					// Use same timeout as original request (already optimized for local models)
+					const response = await openai.chat.completions.create(optionsWithoutTools)
+					// Atomic check-and-set to prevent race conditions
+					if (processingState.responseProcessed || processingState.isProcessing || !isRetrying) {
+						return // Guard against duplicate processing
+					}
+					processingState.isProcessing = true
+					streamingResponse = response
+					try {
+						await processStreamingResponse(response)
+						processingState.responseProcessed = true
+					} finally {
+						processingState.isProcessing = false
+					}
+					isRetrying = false
+					// Successfully retried without tools - silently continue
+					// Note: XML-based tool calling will still work if the model supports it
+					return // Exit early to prevent showing any error
+				} catch (retryError) {
+					// Log the retry failure for debugging
+					console.debug('[sendLLMMessage] Retry without tools also failed:', retryError instanceof Error ? retryError.message : String(retryError))
+					// If retry also fails, show the original error
+					onError({
+						message: `Model does not support tool calling: ${error.message || 'Unknown error'}`,
+						fullError: retryError instanceof Error ? retryError : new Error(String(retryError))
+					})
+					return
+				}
+			}
 			else if (error instanceof OpenAI.APIError && error.status === 401) {
 				onError({ message: invalidApiKeyMessage(providerName), fullError: error });
 			}
@@ -547,7 +914,7 @@ const _openaiCompatibleList = async ({ onSuccess: onSuccess_, onError: onError_,
 		onError_({ error })
 	}
 	try {
-		const openai = await newOpenAICompatibleSDK({ providerName, settingsOfProvider })
+		const openai = await getOpenAICompatibleClient({ providerName, settingsOfProvider })
 		openai.models.list()
 			.then(async (response) => {
 				const models: OpenAIModel[] = []
@@ -765,12 +1132,6 @@ const sendMistralFIM = ({ messages, onFinalMessage, onError, settingsOfProvider,
 
 
 // ------------ OLLAMA ------------
-const newOllamaSDK = ({ endpoint }: { endpoint: string }) => {
-	// if endpoint is empty, normally ollama will send to 11434, but we want it to fail - the user should type it in
-	if (!endpoint) throw new Error(`Ollama Endpoint was empty (please enter ${defaultProviderSettings.ollama.endpoint} in CortexIDE Settings if you want the default url).`)
-	const ollama = new Ollama({ host: endpoint })
-	return ollama
-}
 
 const ollamaList = async ({ onSuccess: onSuccess_, onError: onError_, settingsOfProvider }: ListParams_Internal<OllamaModelResponse>) => {
 	const onSuccess = ({ models }: { models: OllamaModelResponse[] }) => {
@@ -781,7 +1142,7 @@ const ollamaList = async ({ onSuccess: onSuccess_, onError: onError_, settingsOf
 	}
 	try {
 		const thisConfig = settingsOfProvider.ollama
-		const ollama = newOllamaSDK({ endpoint: thisConfig.endpoint })
+		const ollama = getOllamaClient({ endpoint: thisConfig.endpoint })
 		ollama.list()
 			.then((response) => {
 				const { models } = response
@@ -796,9 +1157,12 @@ const ollamaList = async ({ onSuccess: onSuccess_, onError: onError_, settingsOf
 	}
 }
 
-const sendOllamaFIM = ({ messages, onFinalMessage, onError, settingsOfProvider, modelName, _setAborter }: SendFIMParams_Internal) => {
+const sendOllamaFIM = ({ messages, onFinalMessage, onError, settingsOfProvider, modelName, _setAborter, featureName, onText }: SendFIMParams_Internal) => {
 	const thisConfig = settingsOfProvider.ollama
-	const ollama = newOllamaSDK({ endpoint: thisConfig.endpoint })
+	const ollama = getOllamaClient({ endpoint: thisConfig.endpoint })
+
+	// Compute num_predict based on feature (Ollama is always local)
+	const numPredictForThisCall = computeMaxTokensForLocalProvider(true, featureName)
 
 	let fullText = ''
 	ollama.generate({
@@ -807,7 +1171,7 @@ const sendOllamaFIM = ({ messages, onFinalMessage, onError, settingsOfProvider, 
 		suffix: messages.suffix,
 		options: {
 			stop: messages.stopTokens,
-			num_predict: 300, // max tokens
+			num_predict: numPredictForThisCall,
 			// repeat_penalty: 1,
 		},
 		raw: true,
@@ -818,6 +1182,15 @@ const sendOllamaFIM = ({ messages, onFinalMessage, onError, settingsOfProvider, 
 			for await (const chunk of stream) {
 				const newText = chunk.response
 				fullText += newText
+				// Call onText during streaming for incremental UI updates (like OpenAI-compatible FIM)
+				// This enables true streaming UX for Ollama autocomplete
+				if (onText && typeof onText === 'function') {
+					onText({
+						fullText,
+						fullReasoning: '',
+						toolCall: undefined,
+					})
+				}
 			}
 			onFinalMessage({ fullText, fullReasoning: '', anthropicReasoning: null })
 		})
@@ -979,8 +1352,72 @@ const sendGeminiChat = async ({
 				if (error.message?.includes('API key')) {
 					onError({ message: invalidApiKeyMessage(providerName), fullError: error });
 				}
-				else if (error?.message?.includes('429')) {
-					onError({ message: 'Rate limit reached. ' + error, fullError: error });
+				else if (error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED') || error?.message?.includes('quota')) {
+					// Parse Gemini rate limit error to extract user-friendly message
+					let rateLimitMessage = 'Rate limit reached. Please check your plan and billing details.';
+					let retryDelay: string | undefined;
+
+					try {
+						// Try to parse the error message which may contain JSON
+						let errorData: any = null;
+
+						// First, try to parse the error message as JSON (it might be a JSON string)
+						try {
+							errorData = JSON.parse(error.message);
+						} catch {
+							// If that fails, check if error.message contains a JSON string
+							const jsonMatch = error.message.match(/\{[\s\S]*\}/);
+							if (jsonMatch) {
+								errorData = JSON.parse(jsonMatch[0]);
+							}
+						}
+
+						// Extract user-friendly message from nested structure
+						if (errorData?.error?.message) {
+							// The message might itself be a JSON string
+							try {
+								const innerError = JSON.parse(errorData.error.message);
+								if (innerError?.error?.message) {
+									rateLimitMessage = innerError.error.message;
+									// Extract retry delay if available
+									const retryInfo = innerError.error.details?.find((d: any) => d['@type'] === 'type.googleapis.com/google.rpc.RetryInfo');
+									if (retryInfo?.retryDelay) {
+										retryDelay = retryInfo.retryDelay;
+									}
+								}
+							} catch {
+								// If inner parse fails, use the outer message
+								rateLimitMessage = errorData.error.message;
+							}
+						} else if (errorData?.error?.code === 429 || errorData?.error?.status === 'RESOURCE_EXHAUSTED') {
+							// Fallback: use a generic rate limit message
+							rateLimitMessage = 'You exceeded your current quota. Please check your plan and billing details.';
+						}
+
+						// Format the final message
+						let finalMessage = rateLimitMessage;
+						if (retryDelay) {
+							// Parse retry delay (format: "57s" or "57.627694635s")
+							const delaySeconds = parseFloat(retryDelay.replace('s', ''));
+							const delayMinutes = Math.floor(delaySeconds / 60);
+							const remainingSeconds = Math.ceil(delaySeconds % 60);
+							if (delayMinutes > 0) {
+								finalMessage += ` Please retry in ${delayMinutes} minute${delayMinutes > 1 ? 's' : ''}${remainingSeconds > 0 ? ` and ${remainingSeconds} second${remainingSeconds > 1 ? 's' : ''}` : ''}.`;
+							} else {
+								finalMessage += ` Please retry in ${Math.ceil(delaySeconds)} second${Math.ceil(delaySeconds) > 1 ? 's' : ''}.`;
+							}
+						} else {
+							finalMessage += ' Please wait a moment before trying again.';
+						}
+
+						// Add helpful links
+						finalMessage += ' For more information, see https://ai.google.dev/gemini-api/docs/rate-limits';
+
+						onError({ message: finalMessage, fullError: error });
+					} catch (parseError) {
+						// If parsing fails, use a generic message
+						onError({ message: 'Rate limit reached. Please check your Gemini API quota and billing details. See https://ai.google.dev/gemini-api/docs/rate-limits', fullError: error });
+					}
 				}
 				else
 					onError({ message: error + '', fullError: error });

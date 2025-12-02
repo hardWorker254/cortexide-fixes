@@ -541,17 +541,26 @@ class AcceptRejectAllFloatingWidget extends Widget implements IOverlayWidget {
 		this._domNode = root;
 		editor.addOverlayWidget(this);
 
-		this.instantiationService.invokeFunction(async accessor => {
+		// Get the mount function promise first (before invokeFunction)
+		const mountVoidCommandBarPromise = getMountVoidCommandBar();
+
+		// Execute async operation, then invoke with fresh accessor
+		(async () => {
 			const uri = editor.getModel()?.uri || null
-			const mountVoidCommandBar = await getMountVoidCommandBar();
-			const res = mountVoidCommandBar(root, accessor, { uri, editor } satisfies CortexideCommandBarProps)
-			if (!res) return
-			this._register(toDisposable(() => res.dispose?.()))
-			this._register(editor.onWillChangeModel((model) => {
-				const uri = model.newModelUrl
-				res.rerender({ uri, editor } satisfies CortexideCommandBarProps)
-			}))
-		})
+			const mountVoidCommandBar = await mountVoidCommandBarPromise;
+
+			// Re-invoke to get a fresh accessor for the mount function
+			// This ensures the accessor is valid during the entire synchronous execution
+			this.instantiationService.invokeFunction(accessor => {
+				const res = mountVoidCommandBar(root, accessor, { uri, editor } satisfies CortexideCommandBarProps)
+				if (!res) return
+				this._register(toDisposable(() => res.dispose?.()))
+				this._register(editor.onWillChangeModel((model) => {
+					const uri = model.newModelUrl
+					res.rerender({ uri, editor } satisfies CortexideCommandBarProps)
+				}))
+			})
+		})()
 	}
 
 

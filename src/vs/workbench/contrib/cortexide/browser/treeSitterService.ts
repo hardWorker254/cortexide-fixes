@@ -42,6 +42,7 @@ class TreeSitterService implements ITreeSitterService {
 	private _enabled = false;
 	private _parserCache: Map<string, any> = new Map(); // language -> parser instance
 	private _wasmModule: any = null;
+	private _loadFailed = false; // Track if module loading has failed to prevent repeated warnings
 
 	constructor(
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
@@ -68,13 +69,24 @@ class TreeSitterService implements ITreeSitterService {
 			return this._wasmModule;
 		}
 
+		// If we've already failed to load, don't try again
+		if (this._loadFailed) {
+			return null;
+		}
+
 		try {
 			// Dynamic import of tree-sitter-wasm
+			// Note: This may fail in browser contexts if the module isn't properly bundled
+			// In that case, TreeSitter features will be disabled gracefully
 			const treeSitterWasm = await import('@vscode/tree-sitter-wasm');
 			this._wasmModule = treeSitterWasm;
 			return this._wasmModule;
 		} catch (error) {
-			this._logService.warn('[TreeSitter] Failed to load tree-sitter-wasm:', error);
+			// Only log the warning once to prevent spam
+			if (!this._loadFailed) {
+				this._logService.warn('[TreeSitter] Failed to load tree-sitter-wasm. AST indexing will be disabled. Error:', error);
+				this._loadFailed = true;
+			}
 			return null;
 		}
 	}

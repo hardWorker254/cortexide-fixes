@@ -185,57 +185,65 @@ export const _registerServices = (accessor: ServicesAccessor) => {
 
 
 const getReactAccessor = (accessor: ServicesAccessor) => {
-	const reactAccessor = {
-		IModelService: accessor.get(IModelService),
-		IClipboardService: accessor.get(IClipboardService),
-		IContextViewService: accessor.get(IContextViewService),
-		IContextMenuService: accessor.get(IContextMenuService),
-		IFileService: accessor.get(IFileService),
-		IHoverService: accessor.get(IHoverService),
-		IThemeService: accessor.get(IThemeService),
-		ILLMMessageService: accessor.get(ILLMMessageService),
-		IRefreshModelService: accessor.get(IRefreshModelService),
-		ICortexideSettingsService: accessor.get(ICortexideSettingsService),
-		IEditCodeService: accessor.get(IEditCodeService),
-		IChatThreadService: accessor.get(IChatThreadService),
+	// Extract all services synchronously in a single pass
+	// This must complete before the accessor becomes invalid
+	// (which happens when invokeFunction returns)
+	try {
+		const reactAccessor = {
+			IModelService: accessor.get(IModelService),
+			IClipboardService: accessor.get(IClipboardService),
+			IContextViewService: accessor.get(IContextViewService),
+			IContextMenuService: accessor.get(IContextMenuService),
+			IFileService: accessor.get(IFileService),
+			IHoverService: accessor.get(IHoverService),
+			IThemeService: accessor.get(IThemeService),
+			ILLMMessageService: accessor.get(ILLMMessageService),
+			IRefreshModelService: accessor.get(IRefreshModelService),
+			ICortexideSettingsService: accessor.get(ICortexideSettingsService),
+			IEditCodeService: accessor.get(IEditCodeService),
+			IChatThreadService: accessor.get(IChatThreadService),
 
-		IInstantiationService: accessor.get(IInstantiationService),
-		ICodeEditorService: accessor.get(ICodeEditorService),
-		ICommandService: accessor.get(ICommandService),
-		IContextKeyService: accessor.get(IContextKeyService),
-		INotificationService: accessor.get(INotificationService),
-		IAccessibilityService: accessor.get(IAccessibilityService),
-		ILanguageConfigurationService: accessor.get(ILanguageConfigurationService),
-		ILanguageDetectionService: accessor.get(ILanguageDetectionService),
-		ILanguageFeaturesService: accessor.get(ILanguageFeaturesService),
-		IKeybindingService: accessor.get(IKeybindingService),
-		ISearchService: accessor.get(ISearchService),
+			IInstantiationService: accessor.get(IInstantiationService),
+			ICodeEditorService: accessor.get(ICodeEditorService),
+			ICommandService: accessor.get(ICommandService),
+			IContextKeyService: accessor.get(IContextKeyService),
+			INotificationService: accessor.get(INotificationService),
+			IAccessibilityService: accessor.get(IAccessibilityService),
+			ILanguageConfigurationService: accessor.get(ILanguageConfigurationService),
+			ILanguageDetectionService: accessor.get(ILanguageDetectionService),
+			ILanguageFeaturesService: accessor.get(ILanguageFeaturesService),
+			IKeybindingService: accessor.get(IKeybindingService),
+			ISearchService: accessor.get(ISearchService),
 
-		IExplorerService: accessor.get(IExplorerService),
-		IEnvironmentService: accessor.get(IEnvironmentService),
-		IConfigurationService: accessor.get(IConfigurationService),
-		IPathService: accessor.get(IPathService),
-		IMetricsService: accessor.get(IMetricsService),
-		ITerminalToolService: accessor.get(ITerminalToolService),
-		ILanguageService: accessor.get(ILanguageService),
-		ICortexideModelService: accessor.get(ICortexideModelService),
-		IWorkspaceContextService: accessor.get(IWorkspaceContextService),
+			IExplorerService: accessor.get(IExplorerService),
+			IEnvironmentService: accessor.get(IEnvironmentService),
+			IConfigurationService: accessor.get(IConfigurationService),
+			IPathService: accessor.get(IPathService),
+			IMetricsService: accessor.get(IMetricsService),
+			ITerminalToolService: accessor.get(ITerminalToolService),
+			ILanguageService: accessor.get(ILanguageService),
+			ICortexideModelService: accessor.get(ICortexideModelService),
+			IWorkspaceContextService: accessor.get(IWorkspaceContextService),
 
-		ICortexideCommandBarService: accessor.get(ICortexideCommandBarService),
-		INativeHostService: accessor.get(INativeHostService),
-		IToolsService: accessor.get(IToolsService),
-		IConvertToLLMMessageService: accessor.get(IConvertToLLMMessageService),
-		ITerminalService: accessor.get(ITerminalService),
-		IExtensionManagementService: accessor.get(IExtensionManagementService),
-		IExtensionTransferService: accessor.get(IExtensionTransferService),
-		IMCPService: accessor.get(IMCPService),
-		IRepoIndexerService: accessor.get(IRepoIndexerService),
-		ISecretDetectionService: accessor.get(ISecretDetectionService),
+			ICortexideCommandBarService: accessor.get(ICortexideCommandBarService),
+			INativeHostService: accessor.get(INativeHostService),
+			IToolsService: accessor.get(IToolsService),
+			IConvertToLLMMessageService: accessor.get(IConvertToLLMMessageService),
+			ITerminalService: accessor.get(ITerminalService),
+			IExtensionManagementService: accessor.get(IExtensionManagementService),
+			IExtensionTransferService: accessor.get(IExtensionTransferService),
+			IMCPService: accessor.get(IMCPService),
+			IRepoIndexerService: accessor.get(IRepoIndexerService),
+			ISecretDetectionService: accessor.get(ISecretDetectionService),
 
-		IStorageService: accessor.get(IStorageService),
+			IStorageService: accessor.get(IStorageService),
 
-	} as const
-	return reactAccessor
+		} as const
+		return reactAccessor
+	} catch (error) {
+		console.error('[ReactServices] Failed to extract services from accessor:', error);
+		throw error;
+	}
 }
 
 type ReactAccessor = ReturnType<typeof getReactAccessor>

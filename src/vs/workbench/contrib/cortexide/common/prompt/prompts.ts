@@ -568,13 +568,45 @@ ${toolDefinitions}
 	}
 	ansStrs.push(fsInfo)
 
-	const fullSystemMsgStr = ansStrs
-		.join('\n\n\n')
-		.trim()
-		.replace('\t', '  ')
-
+	const fullSystemMsgStr = ansStrs.join('\n\n')
 	return fullSystemMsgStr
+}
 
+// Minimal chat system message for local models (drastically reduced)
+// Used for local models to minimize token usage and latency
+export const chat_systemMessage_local = ({ workspaceFolders, openedURIs, activeURI, chatMode: mode, includeXMLToolDefinitions, relevantMemories, mcpTools }: { workspaceFolders: string[], directoryStr: string, openedURIs: string[], activeURI: string | undefined, persistentTerminalIDs: string[], chatMode: ChatMode, mcpTools: InternalToolInfo[] | undefined, includeXMLToolDefinitions: boolean, relevantMemories?: string }) => {
+	const header = mode === 'agent'
+		? 'Coding agent. Use tools for actions.'
+		: mode === 'gather'
+		? 'Code assistant. Search and reference files.'
+		: 'Code assistant.'
+
+	const sysInfo = `System: ${os}\nWorkspace: ${workspaceFolders.join(', ') || 'none'}\nActive: ${activeURI || 'none'}\nOpen: ${openedURIs.slice(0, 3).join(', ') || 'none'}${openedURIs.length > 3 ? '...' : ''}`
+
+	const toolDefinitions = includeXMLToolDefinitions ? systemToolsXMLPrompt(mode, mcpTools) : null
+
+	const details: string[] = []
+	if (mode === 'agent') {
+		details.push('Use tools. Read files before answering.')
+	} else if (mode === 'gather') {
+		details.push('Use tools. One at a time.')
+	}
+
+	const importantDetails = details.length > 0 ? `\n${details.join('\n')}` : ''
+
+	const memoriesSection = relevantMemories ? `\n\n<memories>\n${relevantMemories.slice(0, 500)}${relevantMemories.length > 500 ? '...' : ''}\n</memories>` : ''
+
+	const ansStrs: string[] = [header, sysInfo]
+	if (toolDefinitions) {
+		ansStrs.push(`\n<tools>\n${toolDefinitions}\n</tools>`)
+	}
+	ansStrs.push(importantDetails)
+	if (memoriesSection) {
+		ansStrs.push(memoriesSection)
+	}
+
+	const fullSystemMsgStr = ansStrs.join('\n\n')
+	return fullSystemMsgStr
 }
 
 
@@ -701,6 +733,11 @@ Directions:
 3. ONLY output the full new file. Do not add any other explanations or text.
 `
 
+// Minimal prompt template for local models (Apply feature)
+export const rewriteCode_systemMessage_local = `\
+Rewrite file with CHANGE. Output full file only. Keep formatting.
+`
+
 
 
 // ======================================================== apply (writeover) ========================================================
@@ -816,6 +853,19 @@ Instructions:
 2. You may ONLY CHANGE the original SELECTION, and NOT the content in the <${preTag}>...</${preTag}> or <${sufTag}>...</${sufTag}> tags.
 3. Make sure all brackets in the new selection are balanced the same as in the original selection.
 4. Be careful not to duplicate or remove variables, comments, or other syntax by mistake.
+`
+}
+
+// Minimal prompt template for local models (Ctrl+K/Apply/Composer)
+// Drastically reduced to minimize token usage and latency
+export const ctrlKStream_systemMessage_local = ({ quickEditFIMTags: { preTag, midTag, sufTag } }: { quickEditFIMTags: QuickEditFimTagsType }) => {
+	return `\
+FIM assistant. Fill <${midTag}>...</${midTag}>.
+
+Rules:
+1. Output ONLY <${midTag}>code</${midTag}> - no text.
+2. Only change SELECTION, not <${preTag}> or <${sufTag}>.
+3. Balance brackets.
 `
 }
 
@@ -1055,6 +1105,9 @@ Example format:
 
 Do not include anything else outside of these tags.
 Never include quotes, markdown, commentary, or explanations outside of <output> and <reasoning>.`.trim()
+
+// Minimal prompt template for local models (SCM commit messages)
+export const gitCommitMessage_systemMessage_local = `Write commit message. Format: <output>message</output><reasoning>brief reason</reasoning>. One sentence preferred.`
 
 
 /**

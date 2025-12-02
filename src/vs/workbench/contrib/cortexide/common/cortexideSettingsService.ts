@@ -10,6 +10,7 @@ import { IEncryptionService } from '../../../../platform/encryption/common/encry
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IMetricsService } from './metricsService.js';
 import { defaultProviderSettings, getModelCapabilities, ModelOverrides } from './modelCapabilities.js';
 import { VOID_SETTINGS_STORAGE_KEY } from './storageKeys.js';
@@ -259,6 +260,7 @@ class VoidSettingsService extends Disposable implements ICortexideSettingsServic
 		@IStorageService private readonly _storageService: IStorageService,
 		@IEncryptionService private readonly _encryptionService: IEncryptionService,
 		@IMetricsService private readonly _metricsService: IMetricsService,
+		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		// could have used this, but it's clearer the way it is (+ slightly different eg StorageTarget.USER)
 		// @ISecretStorageService private readonly _secretStorageService: ISecretStorageService,
 	) {
@@ -269,6 +271,29 @@ class VoidSettingsService extends Disposable implements ICortexideSettingsServic
 		let resolver: () => void = () => { }
 		this.waitForInitState = new Promise((res, rej) => resolver = res)
 		this._resolver = resolver
+
+		// Subscribe to VS Code configuration changes for localFirstAI
+		// This ensures state stays in sync when user changes the setting in VS Code Settings UI
+		this._register(
+			this._configurationService.onDidChangeConfiguration(e => {
+				if (e.affectsConfiguration('cortexide.global.localFirstAI')) {
+					const configValue = this._configurationService.getValue<boolean>('cortexide.global.localFirstAI') ?? false
+					// Update state if it differs from current value
+					if (this.state.globalSettings.localFirstAI !== configValue) {
+						const newState: CortexideSettingsState = {
+							...this.state,
+							globalSettings: {
+								...this.state.globalSettings,
+								localFirstAI: configValue
+							}
+						}
+						this.state = _validatedModelState(newState)
+						// Don't write to storage - VS Code config is the source of truth
+						this._onDidChangeState.fire()
+					}
+				}
+			})
+		)
 
 		this.readAndInitializeState()
 	}
@@ -358,6 +383,12 @@ class VoidSettingsService extends Disposable implements ICortexideSettingsServic
 		this.state = _stateWithMergedDefaultModels(this.state)
 		this.state = _validatedModelState(this.state);
 
+		// Override localFirstAI from VS Code configuration (source of truth)
+		// This ensures VS Code Settings UI controls the behavior
+		const configLocalFirstAI = this._configurationService.getValue<boolean>('cortexide.global.localFirstAI')
+		if (configLocalFirstAI !== undefined) {
+			this.state.globalSettings.localFirstAI = configLocalFirstAI
+		}
 
 		this._resolver();
 		this._onDidChangeState.fire();
@@ -428,6 +459,14 @@ class VoidSettingsService extends Disposable implements ICortexideSettingsServic
 	}
 
 	setGlobalSetting: SetGlobalSettingFn = async (settingName, newVal) => {
+		// Special handling for localFirstAI: write to VS Code config (source of truth)
+		// This ensures consistency if internal UI ever exposes this setting
+		if (settingName === 'localFirstAI') {
+			await this._configurationService.updateValue('cortexide.global.localFirstAI', newVal)
+			// State will be updated via config change listener, so return early
+			return
+		}
+
 		const newState: CortexideSettingsState = {
 			...this.state,
 			globalSettings: {

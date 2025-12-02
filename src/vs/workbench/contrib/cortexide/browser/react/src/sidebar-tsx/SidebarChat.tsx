@@ -4402,9 +4402,10 @@ export const SidebarChat = () => {
 		anthropicReasoning: null,
 	}), [displayContentSoFar, reasoningSoFar])
 
-	// Only show streaming message when actively streaming (LLM or preparing)
+	// Only show streaming message when actively streaming (LLM, tool, or preparing)
 	// Don't show when idle/undefined to prevent duplicate messages and never-ending loading
-	const isActivelyStreaming = isRunning === 'LLM' || isRunning === 'preparing'
+	// Only show stop button when actively running (LLM, tool, preparing), not when idle
+	const isActivelyStreaming = isRunning === 'LLM' || isRunning === 'tool' || isRunning === 'preparing'
 	const currStreamingMessageHTML = isActivelyStreaming && (reasoningSoFar || displayContentSoFar) ?
 		<ChatBubble
 			key={'curr-streaming-msg'}
@@ -4531,7 +4532,7 @@ export const SidebarChat = () => {
 		featureName='Chat'
 		onSubmit={() => onSubmit()}
 		onAbort={onAbort}
-		isStreaming={!!isRunning}
+		isStreaming={isActivelyStreaming}
 		isDisabled={isDisabled}
 		showSelections={true}
 		// showProspectiveSelections={previousMessagesHTML.length === 0}

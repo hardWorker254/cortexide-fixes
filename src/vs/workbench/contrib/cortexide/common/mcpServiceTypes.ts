@@ -116,6 +116,38 @@ export interface MCPTool {
 
 // MCP SERVER CONFIG FILE TYPES -----------------------------
 
+/**
+ * Configuration entry for an MCP server in the CortexIDE mcp.json config file.
+ *
+ * Supports two connection modes:
+ * 1. Command-based (stdio): Use `command` and `args` to run a local process
+ * 2. URL-based (HTTP/SSE): Use `url` to connect to a remote server
+ *
+ * For URL-based servers:
+ * - If `type` is 'sse', connects using Server-Sent Events (SSE) transport
+ * - If `type` is 'http', connects using Streamable HTTP transport
+ * - If `type` is not specified, tries HTTP first, then falls back to SSE
+ * - If URL path contains '/sse', automatically uses SSE transport
+ *
+ * Examples:
+ * ```json
+ * {
+ *   "my-server": {
+ *     "url": "https://mcp.example.com/sse?key=****",
+ *     "type": "sse"
+ *   }
+ * }
+ * ```
+ * or
+ * ```json
+ * {
+ *   "my-server": {
+ *     "url": "https://mcp.example.com/sse?key=****"
+ *   }
+ * }
+ * ```
+ * (The '/sse' in the URL path will automatically select SSE transport)
+ */
 export interface MCPConfigFileEntryJSON {
 	// Command-based server properties
 	command?: string;
@@ -123,7 +155,13 @@ export interface MCPConfigFileEntryJSON {
 	env?: Record<string, string>;
 
 	// URL-based server properties
-	url?: URL;
+	url?: string | URL; // String from JSON, or URL object if converted
+	/**
+	 * Optional transport type: 'http' for Streamable HTTP, 'sse' for Server-Sent Events.
+	 * If not specified, tries HTTP first, then falls back to SSE.
+	 * If URL path contains '/sse', automatically uses SSE transport.
+	 */
+	type?: 'http' | 'sse';
 	headers?: Record<string, string>;
 }
 

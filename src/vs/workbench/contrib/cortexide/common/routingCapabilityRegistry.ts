@@ -145,7 +145,7 @@ export class ModelCapabilityRegistry {
 		let latencyBand: string;
 		if (name.includes('mini') || name.includes('fast') || name.includes('haiku') || name.includes('nano') || name.includes('flash')) {
 			latencyBand = 'low';
-		} else if (name.includes('opus') || name.includes('ultra') || name.includes('o1') || name.includes('o3')) {
+		} else if (name.includes('opus') || name.includes('ultra') || name.includes('o1') || (name.includes('o3') && name.includes('mini'))) {
 			latencyBand = 'high';
 		} else {
 			latencyBand = 'medium';

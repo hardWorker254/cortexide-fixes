@@ -169,29 +169,80 @@ export class MCPChannel implements IServerChannel {
 		let info: MCPServerNonError;
 
 		if (server.url) {
-			// first try HTTP, fall back to SSE
+			// Normalize URL to URL object (MCP SDK transports accept URL objects)
+			let url: URL;
 			try {
-				transport = new StreamableHTTPClientTransport(server.url);
-				await client.connect(transport);
-				console.log(`Connected via HTTP to ${serverName}`);
-				const { tools } = await client.listTools()
-				const toolsWithUniqueName = tools.map(({ name, ...rest }) => ({ name: this._addUniquePrefix(name), ...rest }))
-				info = {
-					status: isOn ? 'success' : 'offline',
-					tools: toolsWithUniqueName,
-					command: server.url.toString(),
+				url = typeof server.url === 'string' ? new URL(server.url) : server.url;
+			} catch (urlErr) {
+				throw new Error(`Invalid URL for server ${serverName}: ${server.url}. ${urlErr instanceof Error ? urlErr.message : String(urlErr)}`);
+			}
+			const urlString = url.toString();
+			// Determine transport type: explicit type, or infer from URL path
+			let transportType = server.type;
+			// If no explicit type, check if URL path suggests SSE (e.g., contains '/sse')
+			if (!transportType && urlString.toLowerCase().includes('/sse')) {
+				transportType = 'sse';
+			}
+
+			// If type is explicitly 'sse' or inferred as SSE, use SSE directly
+			if (transportType === 'sse') {
+				try {
+					transport = new SSEClientTransport(url);
+					await client.connect(transport);
+					console.log(`Connected via SSE to ${serverName}`);
+					const { tools } = await client.listTools()
+					const toolsWithUniqueName = tools.map(({ name, ...rest }) => ({ name: this._addUniquePrefix(name), ...rest }))
+					info = {
+						status: isOn ? 'success' : 'offline',
+						tools: toolsWithUniqueName,
+						command: urlString,
+					}
+				} catch (sseErr) {
+					throw new Error(`Failed to connect to SSE server at ${urlString}: ${sseErr instanceof Error ? sseErr.message : String(sseErr)}`);
 				}
-			} catch (httpErr) {
-				console.warn(`HTTP failed for ${serverName}, trying SSE…`, httpErr);
-				transport = new SSEClientTransport(server.url);
-				await client.connect(transport);
-				const { tools } = await client.listTools()
-				const toolsWithUniqueName = tools.map(({ name, ...rest }) => ({ name: this._addUniquePrefix(name), ...rest }))
-				console.log(`Connected via SSE to ${serverName}`);
-				info = {
-					status: isOn ? 'success' : 'offline',
-					tools: toolsWithUniqueName,
-					command: server.url.toString(),
+			}
+			// If type is explicitly 'http', only try HTTP
+			else if (transportType === 'http') {
+				try {
+					transport = new StreamableHTTPClientTransport(url);
+					await client.connect(transport);
+					console.log(`Connected via HTTP to ${serverName}`);
+					const { tools } = await client.listTools()
+					const toolsWithUniqueName = tools.map(({ name, ...rest }) => ({ name: this._addUniquePrefix(name), ...rest }))
+					info = {
+						status: isOn ? 'success' : 'offline',
+						tools: toolsWithUniqueName,
+						command: urlString,
+					}
+				} catch (httpErr) {
+					throw new Error(`Failed to connect to HTTP server at ${urlString}: ${httpErr instanceof Error ? httpErr.message : String(httpErr)}`);
+				}
+			}
+			// If type is not specified, try HTTP first, fall back to SSE
+			else {
+				try {
+					transport = new StreamableHTTPClientTransport(url);
+					await client.connect(transport);
+					console.log(`Connected via HTTP to ${serverName}`);
+					const { tools } = await client.listTools()
+					const toolsWithUniqueName = tools.map(({ name, ...rest }) => ({ name: this._addUniquePrefix(name), ...rest }))
+					info = {
+						status: isOn ? 'success' : 'offline',
+						tools: toolsWithUniqueName,
+						command: urlString,
+					}
+				} catch (httpErr) {
+					console.warn(`HTTP failed for ${serverName}, trying SSE…`, httpErr);
+					transport = new SSEClientTransport(url);
+					await client.connect(transport);
+					const { tools } = await client.listTools()
+					const toolsWithUniqueName = tools.map(({ name, ...rest }) => ({ name: this._addUniquePrefix(name), ...rest }))
+					console.log(`Connected via SSE to ${serverName}`);
+					info = {
+						status: isOn ? 'success' : 'offline',
+						tools: toolsWithUniqueName,
+						command: urlString,
+					}
 				}
 			}
 		} else if (server.command) {
@@ -238,51 +289,53 @@ export class MCPChannel implements IServerChannel {
 			const c: ClientInfo = await this._createClientUnsafe(serverConfig, serverName, isOn)
 			return c
 		} catch (err) {
-			console.error(`❌ Failed to connect to server "${serverName}":`, err)
-			const fullCommand = !serverConfig.command ? '' : `${serverConfig.command} ${serverConfig.args?.join(' ') || ''}`
-			const c: MCPServerError = { status: 'error', error: err + '', command: fullCommand, }
-			return { mcpServerEntryJSON: serverConfig, mcpServer: c, }
+			console.error(`❌ Failed to connect to server "${serverName}":`, err);
+			const fullCommand = !serverConfig.command ? '' : `${serverConfig.command} ${serverConfig.args?.join(' ') || ''}`;
+			const c: MCPServerError = { status: 'error', error: err + '', command: fullCommand, };
+			return { mcpServerEntryJSON: serverConfig, mcpServer: c, };
 		}
 	}
 
 	private async _closeAllMCPServers() {
 		for (const serverName in this.infoOfClientId) {
-			await this._closeClient(serverName)
-			delete this.infoOfClientId[serverName]
+			await this._closeClient(serverName);
+			delete this.infoOfClientId[serverName];
 		}
 		console.log('Closed all MCP servers');
 	}
 
 	private async _closeClient(serverName: string) {
-		const info = this.infoOfClientId[serverName]
-		if (!info) return
-		const { _client: client } = info
+		const info = this.infoOfClientId[serverName];
+		if (!info) {
+			return;
+		}
+		const { _client: client } = info;
 		if (client) {
-			await client.close()
+			await client.close();
 		}
 		console.log(`Closed MCP server ${serverName}`);
 	}
 
 
 	private async _toggleMCPServer(serverName: string, isOn: boolean) {
-		const prevServer = this.infoOfClientId[serverName]?.mcpServer
+		const prevServer = this.infoOfClientId[serverName]?.mcpServer;
 		// Handle turning on the server
 		if (isOn) {
 			// this.mcpEmitters.serverEvent.onChangeLoading.fire(getLoadingServerObject(serverName, isOn))
-			const clientInfo = await this._createClientUnsafe(this.infoOfClientId[serverName].mcpServerEntryJSON, serverName, isOn)
+			const clientInfo = await this._createClientUnsafe(this.infoOfClientId[serverName].mcpServerEntryJSON, serverName, isOn);
 			this.mcpEmitters.serverEvent.onUpdate.fire({
 				response: {
 					name: serverName,
 					newServer: clientInfo.mcpServer,
 					prevServer: prevServer,
 				}
-			})
+			});
 		}
 		// Handle turning off the server
 		else {
 			// this.mcpEmitters.serverEvent.onChangeLoading.fire(getLoadingServerObject(serverName, isOn))
-			this._closeClient(serverName)
-			delete this.infoOfClientId[serverName]._client
+			this._closeClient(serverName);
+			delete this.infoOfClientId[serverName]._client;
 
 			this.mcpEmitters.serverEvent.onUpdate.fire({
 				response: {
@@ -296,31 +349,35 @@ export class MCPChannel implements IServerChannel {
 					},
 					prevServer: prevServer,
 				}
-			})
+			});
 		}
 	}
 
 	// tool call functions
 
-	private async _callTool(serverName: string, toolName: string, params: any): Promise<RawMCPToolCall> {
-		const server = this.infoOfClientId[serverName]
-		if (!server) throw new Error(`Server ${serverName} not found`)
-		const { _client: client } = server
-		if (!client) throw new Error(`Client for server ${serverName} not found`)
+	private async _callTool(serverName: string, toolName: string, params: Record<string, unknown>): Promise<RawMCPToolCall> {
+		const server = this.infoOfClientId[serverName];
+		if (!server) {
+			throw new Error(`Server ${serverName} not found`);
+		}
+		const { _client: client } = server;
+		if (!client) {
+			throw new Error(`Client for server ${serverName} not found`);
+		}
 
 		// Call the tool with the provided parameters
 		const response = await client.callTool({
 			name: removeMCPToolNamePrefix(toolName),
 			arguments: params
-		})
-		const { content } = response as CallToolResult
-		const returnValue = content[0]
+		});
+		const { content } = response as CallToolResult;
+		const returnValue = content[0];
 
 		if (returnValue.type === 'text') {
 			// handle text response
 
 			if (response.isError) {
-				throw new Error(`Tool call error: ${returnValue.text}`)
+				throw new Error(`Tool call error: ${returnValue.text}`);
 			}
 
 			// handle success
@@ -329,7 +386,7 @@ export class MCPChannel implements IServerChannel {
 				text: returnValue.text,
 				toolName,
 				serverName,
-			}
+			};
 		}
 
 		// if (returnValue.type === 'audio') {
@@ -344,32 +401,37 @@ export class MCPChannel implements IServerChannel {
 		// 	// handle resource response
 		// }
 
-		throw new Error(`Tool call error: We don\'t support ${returnValue.type} tool response yet for tool ${toolName} on server ${serverName}`)
+		throw new Error(`Tool call error: We don\'t support ${returnValue.type} tool response yet for tool ${toolName} on server ${serverName}`);
 	}
 
 	// tool call error wrapper
-	private async _safeCallTool(serverName: string, toolName: string, params: any): Promise<RawMCPToolCall> {
+	private async _safeCallTool(serverName: string, toolName: string, params: Record<string, unknown>): Promise<RawMCPToolCall> {
 		try {
-			const response = await this._callTool(serverName, toolName, params)
-			return response
+			const response = await this._callTool(serverName, toolName, params);
+			return response;
 		} catch (err) {
 
 			let errorMessage: string;
 
 			if (typeof err === 'object' && err !== null && err['code']) {
-				const code = err.code
-				let codeDescription = ''
-				if (code === -32700)
+				const code = err.code;
+				let codeDescription = '';
+				if (code === -32700) {
 					codeDescription = 'Parse Error';
-				if (code === -32600)
+				}
+				if (code === -32600) {
 					codeDescription = 'Invalid Request';
-				if (code === -32601)
+				}
+				if (code === -32601) {
 					codeDescription = 'Method Not Found';
-				if (code === -32602)
+				}
+				if (code === -32602) {
 					codeDescription = 'Invalid Parameters';
-				if (code === -32603)
+				}
+				if (code === -32603) {
 					codeDescription = 'Internal Error';
-				errorMessage = `${codeDescription}. Full response:\n${JSON.stringify(err, null, 2)}`
+				}
+				errorMessage = `${codeDescription}. Full response:\n${JSON.stringify(err, null, 2)}`;
 			}
 			// Check if it's an MCP error with a code
 			else if (typeof err === 'string') {
@@ -386,8 +448,8 @@ export class MCPChannel implements IServerChannel {
 				text: fullErrorMessage,
 				toolName,
 				serverName,
-			}
-			return errorResponse
+			};
+			return errorResponse;
 		}
 	}
 }

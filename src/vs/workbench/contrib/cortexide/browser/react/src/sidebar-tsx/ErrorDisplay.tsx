@@ -29,12 +29,23 @@ export const ErrorDisplay = ({
 }) => {
 	const [isExpanded, setIsExpanded] = useState(false);
 
-	// Normalize error message - strip stack traces from UI
-	const normalizedMessage = fullError ? toErrorMessage(fullError, false) : message_;
+	// Normalize error message - prefer the provided message, fall back to extracting from error object
+	// This ensures user-friendly messages (like rate limit errors) are shown correctly
+	let normalizedMessage: string;
+	if (message_ && message_.trim()) {
+		// Use the provided message if it exists and is not empty
+		normalizedMessage = message_;
+	} else if (fullError) {
+		// Fall back to extracting message from error object
+		normalizedMessage = toErrorMessage(fullError, false);
+	} else {
+		// Last resort: generic error message
+		normalizedMessage = 'An unknown error occurred. Please consult the log for more details.';
+	}
 
 	// Only show details in dev mode or when explicitly expanded (never show raw stacks)
 	const details = isExpanded && fullError ? errorDetails(fullError) : null;
-	const isExpandable = !!fullError && (fullError.stack || fullError.message !== normalizedMessage);
+	const isExpandable = !!fullError && (fullError.stack || (fullError.message && fullError.message !== normalizedMessage));
 
 	const message = normalizedMessage + ''
 

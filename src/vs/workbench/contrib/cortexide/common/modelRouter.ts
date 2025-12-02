@@ -174,8 +174,26 @@ export class TaskAwareModelRouter extends Disposable implements ITaskAwareModelR
 		// requiresPrivacy is set only when images/PDFs are present and imageQAAllowRemoteModels is false
 		if (context.requiresPrivacy) {
 			const decision = this.routeToLocalModel(context);
-			this.routingCache.set(cacheKey, { decision, timestamp: Date.now() });
-			return decision;
+			if (decision) {
+				this.routingCache.set(cacheKey, { decision, timestamp: Date.now() });
+				return decision;
+			}
+			// No local models available in privacy mode - return error decision
+			return {
+				modelSelection: { providerName: 'auto', modelName: 'auto' },
+				confidence: 0.0,
+				reasoning: 'Privacy mode requires local models, but no local models are configured. Please configure a local provider (Ollama, vLLM, or LM Studio).',
+				qualityTier: 'abstain',
+				shouldAbstain: true,
+				abstainReason: 'No local models available for privacy mode',
+			};
+		}
+
+		// Local-First AI mode: heavily bias toward local models
+		const localFirstAI = settingsState.globalSettings.localFirstAI ?? false;
+		if (localFirstAI) {
+			// In Local-First mode, prefer local models but allow cloud as fallback
+			// This is handled in scoreModel by applying heavy bonuses to local models
 		}
 
 		// Quality gate: pre-flight quality estimate
@@ -391,7 +409,19 @@ export class TaskAwareModelRouter extends Disposable implements ITaskAwareModelR
 
 		if (scored.length === 0) {
 			// Fallback: try local models even if privacy not required
-			return this.routeToLocalModel(context);
+			const localDecision = this.routeToLocalModel(context);
+			if (localDecision) {
+				return localDecision;
+			}
+			// No models available at all - return error decision
+			return {
+				modelSelection: { providerName: 'auto', modelName: 'auto' },
+				confidence: 0.0,
+				reasoning: 'No models available. Please configure at least one model provider in settings.',
+				qualityTier: 'abstain',
+				shouldAbstain: true,
+				abstainReason: 'No models configured',
+			};
 		}
 
 		const best = scored[0];
@@ -421,9 +451,21 @@ export class TaskAwareModelRouter extends Disposable implements ITaskAwareModelR
 		// Safety check: ensure we never return 'auto' as a model selection
 		// (This should never happen due to filtering, but add safeguard)
 		if (finalModel.providerName === 'auto' && finalModel.modelName === 'auto') {
-			// This should never happen, but if it does, fall back to local models
-			console.error('[ModelRouter] Error: Attempted to return "auto" model selection. Falling back to local model.');
-			return this.routeToLocalModel(context);
+			// This should never happen, but if it does, try local models as fallback
+			console.error('[ModelRouter] Error: Attempted to return "auto" model selection. Trying local model fallback.');
+			const localDecision = this.routeToLocalModel(context);
+			if (localDecision) {
+				return localDecision;
+			}
+			// Last resort: return error
+			return {
+				modelSelection: { providerName: 'auto', modelName: 'auto' },
+				confidence: 0.0,
+				reasoning: 'Router error: No valid model could be selected. Please check your model configuration.',
+				qualityTier: 'abstain',
+				shouldAbstain: true,
+				abstainReason: 'Router error: invalid model selection',
+			};
 		}
 
 		// Record routing decision for evaluation
@@ -734,6 +776,9 @@ export class TaskAwareModelRouter extends Disposable implements ITaskAwareModelR
 		const provider = modelSelection.providerName.toLowerCase();
 		const isLocal = (localProviderNames as readonly ProviderName[]).includes(modelSelection.providerName as ProviderName);
 
+		// Check Local-First AI setting
+		const localFirstAI = settingsState.globalSettings.localFirstAI ?? false;
+
 		let score = 0; // Start from 0, build up based on quality and fit
 
 		// ===== QUALITY TIER SCORING (Primary Factor) =====
@@ -761,6 +806,11 @@ export class TaskAwareModelRouter extends Disposable implements ITaskAwareModelR
 		// Tier 4: Local models (baseline, can be boosted by capabilities)
 		else {
 			score += 10;
+			// Boost local models that have useful capabilities (FIM, tools, reasoning)
+			if (capabilities.supportsFIM || capabilities.specialToolFormat ||
+			    (capabilities.reasoningCapabilities && typeof capabilities.reasoningCapabilities === 'object' && capabilities.reasoningCapabilities.supportsReasoning)) {
+				score += 5; // Bonus for capable local models
+			}
 		}
 
 		// ===== TASK-SPECIFIC LOCAL MODEL PENALTIES =====
@@ -777,8 +827,23 @@ export class TaskAwareModelRouter extends Disposable implements ITaskAwareModelR
 		}
 
 		// Complex reasoning tasks: Local models often lack depth
+		// BUT: Only penalize if model doesn't have reasoning capabilities
 		if (context.requiresComplexReasoning && isLocal) {
-			score -= 40; // Very strong penalty - complex reasoning needs high-quality models
+			const hasReasoningCapabilities = capabilities.reasoningCapabilities && typeof capabilities.reasoningCapabilities === 'object' && capabilities.reasoningCapabilities.supportsReasoning;
+			if (hasReasoningCapabilities) {
+				// Local models with reasoning support (e.g., DeepSeek R1, QwQ) can handle complex reasoning
+				if (localFirstAI) {
+					score += 15; // Bonus for reasoning-capable local models in Local-First mode
+				} else {
+					score -= 10; // Small penalty - prefer online but allow capable local models
+				}
+			} else {
+				if (localFirstAI) {
+					score -= 10; // Reduced penalty in Local-First mode (still prefer capable models)
+				} else {
+					score -= 40; // Very strong penalty - complex reasoning needs high-quality models
+				}
+			}
 		}
 
 		// Long messages: Often indicate complex tasks that need better models
@@ -959,10 +1024,26 @@ export class TaskAwareModelRouter extends Disposable implements ITaskAwareModelR
 					score += 8; // System messages help guide code generation
 				}
 
-				// Local code models can be decent for simple tasks, but online models are generally better
-				// Apply a moderate penalty (less than vision/PDF/reasoning)
+				// Local code models: Only penalize if they lack required capabilities
+				// Local models with FIM or tool support are actually good for edit flows
 				if (isLocal) {
-					score -= 15; // Moderate penalty - online code models are often better for implementation
+					const hasRequiredCapabilities = capabilities.supportsFIM || capabilities.specialToolFormat;
+					if (hasRequiredCapabilities) {
+						// Local models with FIM/tool support are competitive for edit flows
+						// In Local-First mode, give bonus instead of penalty
+						if (localFirstAI) {
+							score += 20; // Bonus for capable local models in Local-First mode
+						} else {
+							score -= 5; // Minimal penalty - capable local models are viable for editing
+						}
+					} else {
+						// Local models without FIM/tool support are less suitable for implementation
+						if (localFirstAI) {
+							score += 5; // Small bonus even without capabilities in Local-First mode
+						} else {
+							score -= 15; // Moderate penalty - online code models are often better
+						}
+					}
 				}
 			}
 		}
@@ -1008,8 +1089,22 @@ export class TaskAwareModelRouter extends Disposable implements ITaskAwareModelR
 		}
 
 		// Tool format support (important for agent mode)
+		// For local models, only enable tools in agent mode to reduce overhead
 		if (capabilities.specialToolFormat) {
-			score += 8;
+			if (isLocal) {
+				// Local models: only give bonus for tools in agent mode (reduce overhead for normal chat)
+				if (context.taskType === 'code' && context.requiresComplexReasoning) {
+					// Agent mode or complex code tasks - tools are valuable
+					score += 8;
+					score += 5; // Extra bonus for local models with tool support in agent mode
+				} else {
+					// Normal chat - tools add overhead, small penalty
+					score -= 5; // Small penalty to prefer models without tool overhead for simple tasks
+				}
+			} else {
+				// Cloud models: tools are always valuable
+				score += 8;
+			}
 		}
 
 		// Reasoning capabilities (valuable for complex tasks)
@@ -1086,6 +1181,49 @@ export class TaskAwareModelRouter extends Disposable implements ITaskAwareModelR
 		// If privacy is required, heavily penalize online models
 		if (context.requiresPrivacy && !isLocal) {
 			score -= 200; // Disqualify online models in privacy mode
+		}
+
+		// ===== LOCAL-FIRST AI MODE =====
+		// When Local-First AI is enabled, heavily bias toward local models
+		// BUT: Reduce bias for heavy tasks that will be slow on local models
+		if (localFirstAI) {
+			// Estimate task size/complexity
+			const estimatedPromptTokens = context.contextSize ||
+				(context.isLongMessage ? 4000 : 1000) +
+				(context.hasImages ? 2000 : 0) +
+				(context.hasPDFs ? 5000 : 0) +
+				(context.requiresComplexReasoning ? 3000 : 0)
+
+			// Threshold for "heavy" tasks that should prefer cloud even in local-first mode
+			const maxSafeLocalTokens = 4000 // Tasks over 4k tokens are heavy for local models
+			const isHeavyTask = estimatedPromptTokens > maxSafeLocalTokens
+
+			if (isLocal) {
+				if (isHeavyTask) {
+					// Heavy tasks: reduce local bonus significantly (still prefer local, but less aggressively)
+					score += 30; // Reduced bonus for heavy tasks
+					// Extra bonus only for very capable local models on heavy tasks
+					if (capabilities.supportsFIM || capabilities.specialToolFormat ||
+					    (capabilities.reasoningCapabilities && typeof capabilities.reasoningCapabilities === 'object' && capabilities.reasoningCapabilities.supportsReasoning)) {
+						score += 20; // Smaller extra bonus
+					}
+				} else {
+					// Light tasks: full local-first bonus
+					score += 100; // Very strong bonus to prefer local models
+					// Extra bonus for capable local models
+					if (capabilities.supportsFIM || capabilities.specialToolFormat ||
+					    (capabilities.reasoningCapabilities && typeof capabilities.reasoningCapabilities === 'object' && capabilities.reasoningCapabilities.supportsReasoning)) {
+						score += 50; // Extra bonus for capable local models
+					}
+				}
+			} else {
+				// Online models: reduce penalty for heavy tasks (allow cloud for heavy work)
+				if (isHeavyTask) {
+					score -= 50; // Reduced penalty for heavy tasks (cloud is acceptable)
+				} else {
+					score -= 150; // Full penalty for light tasks (prefer local)
+				}
+			}
 		}
 
 		// ===== ADDITIONAL TASK-SPECIFIC SCORING =====
@@ -1280,8 +1418,9 @@ export class TaskAwareModelRouter extends Disposable implements ITaskAwareModelR
 
 	/**
 	 * Route to a local model (privacy/offline mode)
+	 * Returns null if no local models are available (caller must handle fallback)
 	 */
-	private routeToLocalModel(context: TaskContext): RoutingDecision {
+	private routeToLocalModel(context: TaskContext): RoutingDecision | null {
 		const settingsState = this.settingsService.state;
 		const localModels: ModelSelection[] = [];
 
@@ -1300,14 +1439,9 @@ export class TaskAwareModelRouter extends Disposable implements ITaskAwareModelR
 			}
 		}
 
+		// Return null if no local models available (don't return invalid hardcoded model)
 		if (localModels.length === 0) {
-			return {
-				modelSelection: { providerName: 'ollama', modelName: 'llama3.1' }, // fallback
-				confidence: 0.3,
-				reasoning: 'No local models available; using fallback. Please configure a local provider.',
-				qualityTier: 'standard',
-				timeoutMs: 30_000,
-			};
+			return null;
 		}
 
 		// Score local models using mixture policy

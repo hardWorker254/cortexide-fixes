@@ -40,7 +40,7 @@ import { IFileService } from '../../../../platform/files/common/files.js';
 import { IMCPService } from '../common/mcpService.js';
 import { RawMCPToolCall } from '../common/mcpServiceTypes.js';
 import { preprocessImagesForQA } from './imageQAIntegration.js';
-import { ITaskAwareModelRouter, TaskContext, TaskType } from '../common/modelRouter.js';
+import { ITaskAwareModelRouter, TaskContext, TaskType, RoutingDecision } from '../common/modelRouter.js';
 import { chatLatencyAudit } from '../common/chatLatencyAudit.js';
 import { IEditRiskScoringService, EditContext, EditRiskScore } from '../common/editRiskScoringService.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
@@ -2642,12 +2642,19 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 		this._setStreamState(threadId, { isRunning: 'idle', interrupt: 'not_needed' })  // just decorative, for clarity
 
 
+		// Track if we've synthesized tools for this request (prevents infinite loops)
+		// This is more reliable than checking message patterns
+		let hasSynthesizedToolsInThisRequest = false
+
+		// Flag to prevent further tool calls after file read limit is exceeded
+		let fileReadLimitExceeded = false
+
 		// tool use loop
 		while (shouldSendAnotherMessage) {
 			// CRITICAL: Check for maximum iterations to prevent infinite loops
 			if (nMessagesSent >= MAX_AGENT_LOOP_ITERATIONS) {
 				this._notificationService.warn(`Agent loop reached maximum iterations (${MAX_AGENT_LOOP_ITERATIONS}). Stopping to prevent infinite loop.`)
-				this._setStreamState(threadId, { isRunning: 'idle', interrupt: 'not_needed' })
+				this._setStreamState(threadId, { isRunning: undefined })
 				return
 			}
 
@@ -2683,15 +2690,15 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 			)
 			const originalRequestId = originalUserMessage ? `${originalUserMessage.displayContent}` : null
 
-			// Track if we've already synthesized a tool for this request
-			const hasSynthesizedForRequest = originalRequestId && chatMessages.some((msg, idx) => {
+			// Also check message history as a fallback (more reliable than pattern matching)
+			const hasSynthesizedForRequest = hasSynthesizedToolsInThisRequest || (originalRequestId && chatMessages.some((msg, idx) => {
 				if (msg.role === 'assistant' && msg.displayContent?.includes('Let me start by')) {
 					// Check if there's a tool message right after this assistant message
 					const nextMsg = chatMessages[idx + 1]
 					return nextMsg?.role === 'tool'
 				}
 				return false
-			})
+			}))
 
 			// Preprocess images through QA pipeline if present
 			let preprocessedMessages = chatMessages;
@@ -2787,7 +2794,8 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 			}
 			chatLatencyAudit.markPromptAssemblyStart(finalRequestId)
 
-			const { messages, separateSystemMessage } = await this._convertToLLMMessagesService.prepareLLMChatMessages({
+			// Use let so we can re-prepare messages when switching models in auto mode
+			let { messages, separateSystemMessage } = await this._convertToLLMMessagesService.prepareLLMChatMessages({
 				chatMessages: preprocessedMessages,
 				modelSelection,
 				chatMode,
@@ -2895,9 +2903,87 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 			let shouldRetryLLM = true
 			let nAttempts = 0
 			let firstTokenReceived = false
+			// Track models we've tried (for auto mode fallback)
+			const triedModels: Set<string> = new Set()
+			// Store original routing decision for fallback chain (only in auto mode)
+			let originalRoutingDecision: RoutingDecision | null = null
+			// Track if we're in auto mode (user selected "auto")
+			const isAutoMode = !modelSelection || (modelSelection.providerName === 'auto' && modelSelection.modelName === 'auto') ||
+			                    (this._settingsService.state.modelSelectionOfFeature['Chat']?.providerName === 'auto' &&
+			                     this._settingsService.state.modelSelectionOfFeature['Chat']?.modelName === 'auto')
+
+			// If in auto mode and we have a model selection, try to get the routing decision for fallback chain
+			if (isAutoMode && modelSelection && modelSelection.providerName !== 'auto') {
+				// We'll get the routing decision when we need it (on first error)
+			}
+
+			// Track previous model to detect switches
+			let previousModelKey: string | null = null
+
 			while (shouldRetryLLM) {
 				shouldRetryLLM = false
 				nAttempts += 1
+
+				// Track this model attempt
+				if (modelSelection && modelSelection.providerName !== 'auto') {
+					const modelKey = `${modelSelection.providerName}/${modelSelection.modelName}`
+					triedModels.add(modelKey)
+
+					// Re-prepare messages if we switched models (for auto mode fallback)
+					// This ensures messages are formatted correctly for the new model
+					if (previousModelKey !== null && previousModelKey !== modelKey) {
+						try {
+							console.log(`[ChatThreadService] Re-preparing messages for new model: ${modelKey}`)
+							const { messages: newMessages, separateSystemMessage: newSeparateSystemMessage } = await this._convertToLLMMessagesService.prepareLLMChatMessages({
+								chatMessages: preprocessedMessages,
+								modelSelection,
+								chatMode,
+								repoIndexerPromise
+							})
+							// Only update if we got valid messages
+							if (newMessages && newMessages.length > 0) {
+								messages = newMessages
+								separateSystemMessage = newSeparateSystemMessage
+								// Update finalRequestId context with new prompt tokens
+								const promptTokens = messages.reduce((acc, m) => {
+									// Handle Gemini messages (use 'parts' instead of 'content')
+									if ('parts' in m) {
+										return acc + m.parts.reduce((sum: number, part) => {
+											if ('text' in part && typeof part.text === 'string') {
+												return sum + Math.ceil(part.text.length / 4)
+											} else if ('inlineData' in part) {
+												return sum + 100
+											}
+											return sum
+										}, 0)
+									}
+									// Handle Anthropic/OpenAI messages (use 'content')
+									if ('content' in m) {
+										if (typeof m.content === 'string') {
+											return acc + Math.ceil(m.content.length / 4)
+										} else if (Array.isArray(m.content)) {
+											return acc + m.content.reduce((sum: number, part: any) => {
+												if (part.type === 'text') {
+													return sum + Math.ceil(part.text.length / 4)
+												} else if (part.type === 'image_url') {
+													return sum + 100
+												}
+												return sum
+											}, 0)
+										}
+										return acc + Math.ceil(JSON.stringify(m.content).length / 4)
+									}
+									return acc
+								}, 0)
+								chatLatencyAudit.markPromptAssemblyEnd(finalRequestId, promptTokens, 0, 0, false)
+							}
+						} catch (prepError) {
+							console.error('[ChatThreadService] Error re-preparing messages for new model:', prepError)
+							// Continue with existing messages if re-prep fails
+						}
+					}
+					previousModelKey = modelKey
+				}
 
 				type ResTypes =
 					| { type: 'llmDone', toolCall?: RawToolCallObj, info: { fullText: string, fullReasoning: string, anthropicReasoning: AnthropicReasoning[] | null } }
@@ -3082,14 +3168,152 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 				// llm res error
 				else if (llmRes.type === 'llmError') {
 					const { error } = llmRes
-					// Check if this is a rate limit error (429) - don't retry these immediately
+					// Check if this is a rate limit error (429)
 					const isRateLimitError = error?.message?.includes('429') ||
 						error?.message?.toLowerCase().includes('rate limit') ||
 						error?.message?.toLowerCase().includes('tokens per min') ||
 						error?.message?.toLowerCase().includes('tpm')
 
-					// For rate limit errors, don't retry - show error immediately
-					if (isRateLimitError) {
+					// In auto mode, try fallback models for ALL errors (not just rate limits)
+					// This ensures auto mode is resilient even if one model is failing
+					if (isAutoMode) {
+						// Get routing decision if we don't have it yet
+						if (!originalRoutingDecision && originalUserMessage) {
+							try {
+								const taskType = this._detectTaskType(originalUserMessage.content, originalUserMessage.images, originalUserMessage.pdfs)
+								const hasImages = originalUserMessage.images && originalUserMessage.images.length > 0
+								const hasPDFs = originalUserMessage.pdfs && originalUserMessage.pdfs.length > 0
+								const hasCode = this._detectCodeInMessage(originalUserMessage.content)
+								const lowerMessage = originalUserMessage.content.toLowerCase().trim()
+								const isCodebaseQuestion = /\b(codebase|code base|repository|repo|project)\b/.test(lowerMessage) ||
+									/\b(architecture|structure|organization|layout)\b.*\b(project|codebase|repo|code)\b/.test(lowerMessage)
+								const requiresComplexReasoning = isCodebaseQuestion
+								const isLongMessage = originalUserMessage.content.length > 500
+
+								const context: TaskContext = {
+									taskType,
+									hasImages,
+									hasPDFs,
+									hasCode,
+									requiresPrivacy: false,
+									preferLowLatency: false,
+									preferLowCost: false,
+									userOverride: null,
+									requiresComplexReasoning,
+									isLongMessage,
+								}
+
+								originalRoutingDecision = await this._modelRouter.route(context)
+							} catch (routerError) {
+								console.error('[ChatThreadService] Error getting routing decision for fallback:', routerError)
+							}
+						}
+
+						// Try next model from fallback chain
+						let nextModel: ModelSelection | null = null
+						if (originalRoutingDecision?.fallbackChain && originalRoutingDecision.fallbackChain.length > 0) {
+							// Find first model in fallback chain that we haven't tried
+							for (const fallbackModel of originalRoutingDecision.fallbackChain) {
+								const modelKey = `${fallbackModel.providerName}/${fallbackModel.modelName}`
+								if (!triedModels.has(modelKey)) {
+									nextModel = fallbackModel
+									break
+								}
+							}
+						}
+
+						// If no fallback model available, try to get a new routing decision excluding tried models
+						if (!nextModel && originalUserMessage) {
+							try {
+								// Get all available models
+								const settingsState = this._settingsService.state
+								const availableModels: ModelSelection[] = []
+								for (const providerName of Object.keys(settingsState.settingsOfProvider) as ProviderName[]) {
+									const providerSettings = settingsState.settingsOfProvider[providerName]
+									if (!providerSettings._didFillInProviderSettings) continue
+									for (const modelInfo of providerSettings.models) {
+										if (!modelInfo.isHidden) {
+											const modelKey = `${providerName}/${modelInfo.modelName}`
+											if (!triedModels.has(modelKey)) {
+												availableModels.push({
+													providerName,
+													modelName: modelInfo.modelName,
+												})
+											}
+										}
+									}
+								}
+
+								// If we have other models available, try to route to one
+								if (availableModels.length > 0) {
+									const taskType = this._detectTaskType(originalUserMessage.content, originalUserMessage.images, originalUserMessage.pdfs)
+									const hasImages = originalUserMessage.images && originalUserMessage.images.length > 0
+									const hasPDFs = originalUserMessage.pdfs && originalUserMessage.pdfs.length > 0
+									const hasCode = this._detectCodeInMessage(originalUserMessage.content)
+									const lowerMessage = originalUserMessage.content.toLowerCase().trim()
+									const isCodebaseQuestion = /\b(codebase|code base|repository|repo|project)\b/.test(lowerMessage)
+									const requiresComplexReasoning = isCodebaseQuestion
+									const isLongMessage = originalUserMessage.content.length > 500
+
+									const context: TaskContext = {
+										taskType,
+										hasImages,
+										hasPDFs,
+										hasCode,
+										requiresPrivacy: false,
+										preferLowLatency: false,
+										preferLowCost: false,
+										userOverride: null,
+										requiresComplexReasoning,
+										isLongMessage,
+									}
+
+									const newRoutingDecision = await this._modelRouter.route(context)
+									if (newRoutingDecision.modelSelection.providerName !== 'auto') {
+										const modelKey = `${newRoutingDecision.modelSelection.providerName}/${newRoutingDecision.modelSelection.modelName}`
+										if (!triedModels.has(modelKey)) {
+											nextModel = newRoutingDecision.modelSelection
+											originalRoutingDecision = newRoutingDecision // Update for next fallback
+										}
+									}
+								}
+							} catch (routerError) {
+								console.error('[ChatThreadService] Error getting new routing decision:', routerError)
+							}
+						}
+
+						// If we found a next model, switch to it and retry
+						if (nextModel) {
+							// Safety check: prevent infinite loops by limiting total model switches
+							if (triedModels.size >= 10) {
+								console.warn('[ChatThreadService] Auto mode: Too many model switches, stopping fallback attempts')
+								// Fall through to show error
+							} else {
+								console.log(`[ChatThreadService] Auto mode: Model ${modelSelection?.providerName}/${modelSelection?.modelName} failed, trying fallback: ${nextModel.providerName}/${nextModel.modelName}`)
+								modelSelection = nextModel
+								// Update request ID for new model
+								const newRequestId = generateUuid()
+								chatLatencyAudit.startRequest(newRequestId, nextModel.providerName, nextModel.modelName)
+								chatLatencyAudit.markRouterStart(newRequestId)
+								chatLatencyAudit.markRouterEnd(newRequestId)
+								// Reset attempt counter for new model (but keep triedModels to avoid retrying same model)
+								nAttempts = 0
+								shouldRetryLLM = true
+								this._setStreamState(threadId, { isRunning: 'idle', interrupt: idleInterruptor })
+								// Short delay before trying next model
+								await timeout(500)
+								if (interruptedWhenIdle) {
+									this._setStreamState(threadId, undefined)
+									return
+								}
+								continue // retry with new model
+							}
+						}
+					}
+
+					// If we're in auto mode and didn't find a fallback model, or if we're not in auto mode:
+					// For rate limit errors in non-auto mode, show error immediately
+					if (isRateLimitError && !isAutoMode) {
 						const { displayContentSoFar, reasoningSoFar, toolCallSoFar } = this.streamState[threadId].llmInfo
 						this._addMessageToThread(threadId, { role: 'assistant', displayContent: displayContentSoFar, reasoning: reasoningSoFar, anthropicReasoning: null })
 						if (toolCallSoFar) this._addMessageToThread(threadId, { role: 'interrupted_streaming_tool', name: toolCallSoFar.name, mcpServerName: this._computeMCPServerOfToolName(toolCallSoFar.name) })
@@ -3099,12 +3323,16 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 						return
 					}
 
-					// For other errors, retry if we haven't exceeded retry limit
-					if (nAttempts < CHAT_RETRIES) {
+					// For non-rate-limit errors in non-auto mode, or if we're in auto mode but no fallback was found:
+					// Retry the same model if we haven't exceeded retry limit (only for non-auto mode or if no fallback available)
+					if (!isAutoMode && nAttempts < CHAT_RETRIES) {
 						shouldRetryLLM = true
 						this._setStreamState(threadId, { isRunning: 'idle', interrupt: idleInterruptor })
-						// Exponential backoff: 1s, 2s, 4s (capped at 5s)
-						const retryDelay = Math.min(INITIAL_RETRY_DELAY * Math.pow(2, nAttempts - 1), MAX_RETRY_DELAY)
+						// Faster retries for local models (they fail fast if not available)
+						const isLocalProvider = modelSelection && (modelSelection.providerName === 'ollama' || modelSelection.providerName === 'vLLM' || modelSelection.providerName === 'lmStudio' || modelSelection.providerName === 'openAICompatible' || modelSelection.providerName === 'liteLLM')
+						// Use shorter delays for local models: 0.5s, 1s, 2s (vs 1s, 2s, 4s for remote)
+						const baseDelay = isLocalProvider ? 500 : INITIAL_RETRY_DELAY
+						const retryDelay = Math.min(baseDelay * Math.pow(2, nAttempts - 1), MAX_RETRY_DELAY)
 						await timeout(retryDelay)
 						if (interruptedWhenIdle) {
 							this._setStreamState(threadId, undefined)
@@ -3113,7 +3341,7 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 						else
 							continue // retry
 					}
-					// error, but too many attempts
+					// error, but too many attempts or no fallback available in auto mode
 					else {
 						const { displayContentSoFar, reasoningSoFar, toolCallSoFar } = this.streamState[threadId].llmInfo
 						this._addMessageToThread(threadId, { role: 'assistant', displayContent: displayContentSoFar, reasoning: reasoningSoFar, anthropicReasoning: null })
@@ -3139,10 +3367,28 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 				// Track if we synthesized a tool and added a message (to prevent duplicate messages)
 				let toolSynthesizedAndMessageAdded = false
 
+				// Check if model supports tool calling before synthesizing tools
+				// This prevents infinite loops when models don't support tools
+				// CRITICAL: Only synthesize tools if:
+				// 1. Model has specialToolFormat set (native tool calling support)
+				// 2. We haven't already synthesized tools for this request (prevents loops)
+				// 3. Model actually responded (not an error case)
+				let modelSupportsTools = false
+				if (modelSelection && modelSelection.providerName !== 'auto') {
+					const { getModelCapabilities } = await import('../common/modelCapabilities.js')
+					const capabilities = getModelCapabilities(modelSelection.providerName, modelSelection.modelName, overridesOfModel)
+					// Model supports tools if it has specialToolFormat set (native tool calling)
+					// BUT: If we've already synthesized tools once and model didn't use them, don't try again
+					// This prevents infinite loops when models have specialToolFormat set but don't actually support tools
+					modelSupportsTools = !!capabilities.specialToolFormat && !hasSynthesizedForRequest
+				}
+
 				// Detect if Agent Mode should have used tools but didn't
 				// Only synthesize ONCE per original request to prevent infinite loops
 				// Also check if we've already read too many files (prevent infinite read loops)
-				if (chatMode === 'agent' && !toolCall && info.fullText.trim() && !hasSynthesizedForRequest && filesReadInQuery < MAX_FILES_READ_PER_QUERY) {
+				// CRITICAL: Only synthesize tools if the model actually supports them
+				// Don't synthesize tools if file read limit was exceeded
+				if (chatMode === 'agent' && !toolCall && info.fullText.trim() && !hasSynthesizedForRequest && filesReadInQuery < MAX_FILES_READ_PER_QUERY && !fileReadLimitExceeded && modelSupportsTools) {
 					if (originalUserMessage) {
 						const userRequest = originalUserMessage.displayContent?.toLowerCase() || ''
 						const actionWords = ['add', 'create', 'edit', 'delete', 'remove', 'update', 'modify', 'change', 'make', 'write', 'build', 'implement', 'fix', 'run', 'execute', 'install', 'setup', 'configure']
@@ -3217,6 +3463,8 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 									anthropicReasoning: null
 								})
 								toolSynthesizedAndMessageAdded = true
+								// Mark that we've synthesized tools for this request (prevents infinite loops)
+								hasSynthesizedToolsInThisRequest = true
 
 								// CRITICAL: Check for pending plan before executing synthesized tool
 								// Use fast check
@@ -3273,22 +3521,51 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 				// This prevents the UI from continuing to show streaming state after completion
 				this._setStreamState(threadId, { isRunning: 'idle', interrupt: 'not_needed' })
 
+				// CRITICAL: If we've synthesized tools and model responded without tools, stop the loop
+				// This prevents infinite loops when models don't support tools
+				// The model has given its final answer, no need to continue
+				if (hasSynthesizedToolsInThisRequest && !toolCall && info.fullText.trim()) {
+					// Model doesn't support tools or chose not to use them - stop here
+					// Set to undefined to properly clear the state and hide the stop button
+					this._setStreamState(threadId, { isRunning: undefined })
+					return
+				}
+
 				// call tool if there is one
 				if (toolCall) {
+					// Skip tool execution if file read limit was exceeded in a previous iteration
+					if (fileReadLimitExceeded) {
+						// Don't execute any more tools - just continue to final LLM call
+						shouldSendAnotherMessage = true
+						continue
+					}
+
 					// CRITICAL: Prevent excessive file reads that can cause infinite loops
 					// For codebase queries, limit the number of files read
 					if (toolCall.name === 'read_file') {
 						filesReadInQuery++
 						if (filesReadInQuery > MAX_FILES_READ_PER_QUERY) {
 							// Too many files read - likely stuck in a loop
+							// Add a message explaining the limit, then make one final LLM call to generate an answer
 							this._addMessageToThread(threadId, {
 								role: 'assistant',
 								displayContent: `I've read ${filesReadInQuery} files, which exceeds the limit. I'll provide an answer based on what I've gathered so far.`,
 								reasoning: '',
 								anthropicReasoning: null
 							})
-							this._setStreamState(threadId, { isRunning: 'idle', interrupt: 'not_needed' })
-							return
+
+							// Set flag to prevent further tool calls
+							fileReadLimitExceeded = true
+
+							// Make one final LLM call to generate the answer based on what we've read
+							// Set state to 'LLM' to show we're generating the final answer
+							this._setStreamState(threadId, { isRunning: 'LLM', llmInfo: { displayContentSoFar: 'Generating final answer based on files read...', reasoningSoFar: '', toolCallSoFar: null }, interrupt: Promise.resolve(() => {}) })
+
+							// Force shouldSendAnotherMessage to true to make one more LLM call
+							// This will generate the final answer before returning
+							shouldSendAnotherMessage = true
+							// Skip tool execution and continue to next LLM call
+							continue
 						}
 					}
 
@@ -3349,7 +3626,8 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 		} // end while (send message)
 
 		// if awaiting user approval, keep isRunning true, else end isRunning
-		this._setStreamState(threadId, { isRunning: isRunningWhenEnd })
+		// Use undefined instead of 'idle' to properly clear the state and hide the stop button
+		this._setStreamState(threadId, { isRunning: isRunningWhenEnd || undefined })
 
 		// add checkpoint before the next user message
 		if (!isRunningWhenEnd) {

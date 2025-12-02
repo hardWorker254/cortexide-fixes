@@ -5,7 +5,7 @@
 
 import { SendLLMMessageParams, OnText, OnFinalMessage, OnError } from '../../common/sendLLMMessageTypes.js';
 import { IMetricsService } from '../../common/metricsService.js';
-import { displayInfoOfProviderName } from '../../common/cortexideSettingsTypes.js';
+import { displayInfoOfProviderName, FeatureName } from '../../common/cortexideSettingsTypes.js';
 import { sendLLMMessageToProviderImplementation } from './sendLLMMessage.impl.js';
 
 
@@ -124,7 +124,10 @@ export const sendLLMMessage = async ({
 		}
 		if (messagesType === 'FIMMessage') {
 			if (sendFIM) {
-				await sendFIM({ messages: messages_, onText, onFinalMessage, onError, settingsOfProvider, modelSelectionOptions, overridesOfModel, modelName, _setAborter, providerName, separateSystemMessage })
+				// Infer featureName from loggingName for max_tokens optimization
+				// "Autocomplete" -> 'Autocomplete', others default to undefined (safe default)
+				const inferredFeatureName: FeatureName | undefined = loggingName === 'Autocomplete' ? 'Autocomplete' : undefined
+				await sendFIM({ messages: messages_, onText, onFinalMessage, onError, settingsOfProvider, modelSelectionOptions, overridesOfModel, modelName, _setAborter, providerName, separateSystemMessage, featureName: inferredFeatureName })
 				return
 			}
 			onError({ message: `Error running Autocomplete with ${providerName} - ${modelName}.`, fullError: null })

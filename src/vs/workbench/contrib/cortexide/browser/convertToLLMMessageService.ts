@@ -54,7 +54,7 @@ function uint8ArrayToBase64(data: Uint8Array): string {
 	}
 }
 import { getIsReasoningEnabledState, getReservedOutputTokenSpace, getModelCapabilities } from '../common/modelCapabilities.js';
-import { reParsedToolXMLString, chat_systemMessage } from '../common/prompt/prompts.js';
+import { reParsedToolXMLString, chat_systemMessage, chat_systemMessage_local } from '../common/prompt/prompts.js';
 import { AnthropicLLMChatMessage, AnthropicReasoning, GeminiLLMChatMessage, LLMChatMessage, LLMFIMMessage, OpenAILLMChatMessage, RawToolParamsObj } from '../common/sendLLMMessageTypes.js';
 import { ICortexideSettingsService } from '../common/cortexideSettingsService.js';
 import { ChatMode, FeatureName, ModelSelection, ProviderName } from '../common/cortexideSettingsTypes.js';
@@ -97,6 +97,40 @@ const TRIM_TO_LEN = 120
 // 20k tokens (~80k chars) gives more conservative headroom for output tokens and image tokens
 // Images can add significant tokens (~85 per 512x512 tile), so we need more headroom
 const MAX_INPUT_TOKENS_SAFETY = 20_000
+
+// Helper function to detect if a provider is local
+// Used for optimizing prompts and token budgets for local models
+export function isLocalProvider(providerName: ProviderName, settingsOfProvider: any): boolean {
+	const isExplicitLocalProvider = providerName === 'ollama' || providerName === 'vLLM' || providerName === 'lmStudio'
+	if (isExplicitLocalProvider) return true
+
+	// Check for localhost endpoints in openAICompatible or liteLLM
+	if (providerName === 'openAICompatible' || providerName === 'liteLLM') {
+		const endpoint = settingsOfProvider[providerName]?.endpoint || ''
+		if (endpoint) {
+			try {
+				const url = new URL(endpoint)
+				const hostname = url.hostname.toLowerCase()
+				return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '::1'
+			} catch (e) {
+				return false
+			}
+		}
+	}
+	return false
+}
+
+// Feature-specific token caps for local models (brutally small to minimize latency)
+const LOCAL_MODEL_TOKEN_CAPS: Record<FeatureName, number> = {
+	'Ctrl+K': 2000,      // Minimal for quick edits
+	'Apply': 2000,       // Minimal for apply operations
+	'Autocomplete': 1000, // Very minimal for autocomplete
+	'Chat': 8192,        // More generous for chat, but still capped
+	'SCM': 4096,         // Moderate for commit messages
+}
+
+// Reserved output space for local models (smaller to allow more input)
+const LOCAL_MODEL_RESERVED_OUTPUT = 1024
 
 // Estimate tokens for images in OpenAI format
 // OpenAI uses ~85 tokens per 512x512 tile, plus base overhead
@@ -1186,7 +1220,7 @@ export interface IConvertToLLMMessageService {
 	readonly _serviceBrand: undefined;
 	prepareLLMSimpleMessages: (opts: { simpleMessages: SimpleLLMMessage[], systemMessage: string, modelSelection: ModelSelection | null, featureName: FeatureName }) => { messages: LLMChatMessage[], separateSystemMessage: string | undefined }
 	prepareLLMChatMessages: (opts: { chatMessages: ChatMessage[], chatMode: ChatMode, modelSelection: ModelSelection | null, repoIndexerPromise?: Promise<{ results: string[], metrics: any } | null> }) => Promise<{ messages: LLMChatMessage[], separateSystemMessage: string | undefined }>
-	prepareFIMMessage(opts: { messages: LLMFIMMessage, }): { prefix: string, suffix: string, stopTokens: string[] }
+	prepareFIMMessage(opts: { messages: LLMFIMMessage, modelSelection: ModelSelection | null, featureName: FeatureName }): { prefix: string, suffix: string, stopTokens: string[] }
 	startRepoIndexerQuery: (chatMessages: ChatMessage[], chatMode: ChatMode) => Promise<{ results: string[], metrics: any } | null>
 }
 
@@ -1368,7 +1402,7 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 	prepareLLMSimpleMessages: IConvertToLLMMessageService['prepareLLMSimpleMessages'] = ({ simpleMessages, systemMessage, modelSelection, featureName }) => {
 		if (modelSelection === null) return { messages: [], separateSystemMessage: undefined }
 
-		const { overridesOfModel } = this.cortexideSettingsService.state
+		const { overridesOfModel, settingsOfProvider } = this.cortexideSettingsService.state
 
 		const { providerName, modelName } = modelSelection
 		// Skip "auto" - it's not a real provider
@@ -1383,14 +1417,28 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 
 		const modelSelectionOptions = this.cortexideSettingsService.state.optionsOfModelSelection[featureName][modelSelection.providerName]?.[modelSelection.modelName]
 
-		// Get combined AI instructions
-		const aiInstructions = this._getCombinedAIInstructions();
+		// Detect if local provider for optimizations
+		const isLocal = isLocalProvider(providerName, settingsOfProvider)
+
+		// Get combined AI instructions (skip for local edit features to reduce tokens)
+		const aiInstructions = (isLocal && (featureName === 'Ctrl+K' || featureName === 'Apply'))
+			? '' // Skip verbose AI instructions for local edit features
+			: this._getCombinedAIInstructions();
 
 		// Keep this method synchronous (indexer enrichment handled in Chat flow)
 		const enrichedSystemMessage = systemMessage;
 
 		const isReasoningEnabled = getIsReasoningEnabledState(featureName, providerName, modelName, modelSelectionOptions, overridesOfModel)
 		const reservedOutputTokenSpace = getReservedOutputTokenSpace(providerName, modelName, { isReasoningEnabled, overridesOfModel })
+
+		// Apply feature-specific token caps for local models
+		let effectiveContextWindow = contextWindow
+		let effectiveReservedOutput = reservedOutputTokenSpace
+		if (isLocal) {
+			const featureTokenCap = LOCAL_MODEL_TOKEN_CAPS[featureName] || 4096
+			effectiveContextWindow = Math.min(effectiveContextWindow, featureTokenCap + (reservedOutputTokenSpace || LOCAL_MODEL_RESERVED_OUTPUT))
+			effectiveReservedOutput = LOCAL_MODEL_RESERVED_OUTPUT // Use smaller reserved space for locals
+		}
 
 		const { messages, separateSystemMessage } = prepareMessages({
 			messages: simpleMessages,
@@ -1399,8 +1447,8 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 			supportsSystemMessage,
 			specialToolFormat,
 			supportsAnthropicReasoning: providerName === 'anthropic',
-			contextWindow,
-			reservedOutputTokenSpace,
+			contextWindow: effectiveContextWindow,
+			reservedOutputTokenSpace: effectiveReservedOutput,
 			providerName,
 		})
 		return { messages, separateSystemMessage };
@@ -1447,8 +1495,61 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 		} = getModelCapabilities(validProviderName, modelName, overridesOfModel)
 
 		const { disableSystemMessage } = this.cortexideSettingsService.state.globalSettings;
-		const fullSystemMessage = await this._generateChatMessagesSystemMessage(chatMode, specialToolFormat)
-		let systemMessage = disableSystemMessage ? '' : fullSystemMessage;
+
+		// For local models, use minimal system message template instead of truncating
+		const isLocal = isLocalProvider(validProviderName, this.cortexideSettingsService.state.settingsOfProvider)
+
+		let systemMessage: string
+		if (disableSystemMessage) {
+			systemMessage = ''
+		} else if (isLocal) {
+			// Use minimal local template for local models
+			const workspaceFolders = this.workspaceContextService.getWorkspace().folders.map(f => f.uri.fsPath)
+			const openedURIs = this.editorService.editors.map(e => e.resource?.fsPath || '').filter(Boolean)
+			const activeURI = this.editorService.activeEditor?.resource?.fsPath
+			const directoryStr = await this.directoryStrService.getAllDirectoriesStr({
+				cutOffMessage: chatMode === 'agent' || chatMode === 'gather' ?
+					`...Directories string cut off, use tools to read more...`
+					: `...Directories string cut off, ask user for more if necessary...`
+			})
+			const includeXMLToolDefinitions = !specialToolFormat || chatMode === 'agent'
+			const mcpTools = this.mcpService.getMCPTools()
+			const persistentTerminalIDs = this.terminalToolService.listPersistentTerminalIds()
+
+			// Get relevant memories for the current context
+			let relevantMemories: string | undefined;
+			if (this.memoriesService.isEnabled()) {
+				try {
+					const queryParts: string[] = [];
+					if (activeURI) {
+						const fileName = activeURI.split('/').pop() || '';
+						queryParts.push(fileName);
+					}
+					openedURIs.forEach(uri => {
+						const fileName = uri.split('/').pop() || '';
+						queryParts.push(fileName);
+					});
+					const query = queryParts.join(' ') || 'project context';
+					const memories = await this.memoriesService.getRelevantMemories(query, 5);
+					if (memories.length > 0) {
+						const memoryLines = memories.map(m => {
+							const typeLabel = m.entry.type === 'decision' ? 'Decision' :
+							                 m.entry.type === 'preference' ? 'Preference' :
+							                 m.entry.type === 'recentFile' ? 'Recent File' : 'Context';
+							return `- [${typeLabel}] ${m.entry.key}: ${m.entry.value}`;
+						});
+						relevantMemories = memoryLines.join('\n');
+					}
+				} catch (error) {
+					console.debug('[ConvertToLLMMessage] Failed to get memories:', error);
+				}
+			}
+
+			systemMessage = chat_systemMessage_local({ workspaceFolders, openedURIs, directoryStr, activeURI, persistentTerminalIDs, chatMode, mcpTools, includeXMLToolDefinitions, relevantMemories })
+		} else {
+			// Use full system message for cloud models
+			systemMessage = await this._generateChatMessagesSystemMessage(chatMode, specialToolFormat)
+		}
 
 		// Query repo indexer if enabled - get context from the LAST user message (most relevant)
 		// PERFORMANCE: Use pre-started promise if available (from parallel execution), otherwise start now
@@ -1535,8 +1636,69 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 		const approximateTotalTokens = (msgs: { role: string, content: string }[], sys: string, instr: string) =>
 			msgs.reduce((acc, m) => acc + estimateTokens(m.content), estimateTokens(sys) + estimateTokens(instr))
 		const rot = reservedOutputTokenSpace ?? 0
+
+		// Optimize context for local models: cap at reasonable values to reduce latency
+		// Local models are slower with large contexts, so we cap them more aggressively
+		// Detect local providers: explicit local providers + localhost endpoints
+		const isExplicitLocalProvider: boolean = validProviderName === 'ollama' || validProviderName === 'vLLM' || validProviderName === 'lmStudio'
+		let isLocalhostEndpoint: boolean = false
+		if (validProviderName === 'openAICompatible' || validProviderName === 'liteLLM') {
+			const endpoint = this.cortexideSettingsService.state.settingsOfProvider[validProviderName]?.endpoint || ''
+			if (endpoint) {
+				try {
+					// Use proper URL parsing to check hostname (consistent with sendLLMMessage.impl.ts)
+					const url = new URL(endpoint)
+					const hostname = url.hostname.toLowerCase()
+					isLocalhostEndpoint = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '::1'
+				} catch (e) {
+					// Invalid URL - assume non-local (safe default)
+					isLocalhostEndpoint = false
+				}
+			}
+		}
+		const isLocalProviderForContext: boolean = isExplicitLocalProvider || isLocalhostEndpoint
+
+		// For local models: apply feature-specific token caps and compress chat history
+		// Instead of hard truncation, use semantic compression to preserve context
+		if (isLocalProviderForContext) {
+			// Note: Chat history compression is now handled by ChatHistoryCompressor
+			// This keeps the last 5 turns uncompressed and compresses older messages
+			// The compression happens in prepareLLMChatMessages before this point
+			// For now, we keep a simple fallback limit if compression isn't available
+			const maxTurnPairs = chatMode === 'agent' ? 5 : 3
+			const userMessages = llmMessages.filter(m => m.role === 'user')
+			if (userMessages.length > maxTurnPairs * 2) {
+				// Keep only the last maxTurnPairs user messages and their corresponding assistant messages
+				const lastUserIndices = userMessages.slice(-maxTurnPairs).map(um => llmMessages.indexOf(um))
+				const firstIndexToKeep = Math.min(...lastUserIndices)
+				llmMessages = llmMessages.slice(firstIndexToKeep)
+			}
+		}
+
+		let effectiveContextWindow = contextWindow
+		if (isLocalProviderForContext) {
+			// Apply feature-specific token cap for Chat feature
+			const chatTokenCap = LOCAL_MODEL_TOKEN_CAPS['Chat']
+			effectiveContextWindow = Math.min(contextWindow, chatTokenCap + (reservedOutputTokenSpace || LOCAL_MODEL_RESERVED_OUTPUT))
+		} else {
+			// For cloud models, use existing logic
+			// Cap local model contexts: use 50% of model's context window, up to 128k max
+			// This reduces latency for large models while still allowing them to use their full capacity
+			// Small models (≤8k) keep full context, medium models (≤32k) get 16k, large models get min(50%, 128k)
+			if (contextWindow <= 8_000) {
+				effectiveContextWindow = contextWindow // Small models: use full context
+			} else if (contextWindow <= 32_000) {
+				effectiveContextWindow = Math.min(contextWindow, 16_000) // Medium models: cap at 16k
+			} else {
+				// Large models: use 50% of context, but cap at 128k to avoid excessive latency
+				effectiveContextWindow = Math.min(Math.floor(contextWindow * 0.5), 128_000)
+			}
+		}
+
 		// More aggressive budget: use 75% instead of 80% to leave more room for output
-		const budget = Math.max(256, Math.floor(contextWindow * 0.75) - rot)
+		// For local models, use 70% to further reduce latency
+		const budgetMultiplier = isLocalProviderForContext ? 0.70 : 0.75
+		const budget = Math.max(256, Math.floor(effectiveContextWindow * budgetMultiplier) - rot)
 		const beforeTokens = approximateTotalTokens(llmMessages, systemMessage, aiInstructions)
 
 		if (beforeTokens > budget && llmMessages.length > 6) {
@@ -1578,9 +1740,16 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 
 	// --- FIM ---
 
-	prepareFIMMessage: IConvertToLLMMessageService['prepareFIMMessage'] = ({ messages }) => {
-		// Get combined AI instructions with the provided aiInstructions as the base
-		const combinedInstructions = this._getCombinedAIInstructions();
+	prepareFIMMessage: IConvertToLLMMessageService['prepareFIMMessage'] = ({ messages, modelSelection, featureName }) => {
+		const { settingsOfProvider } = this.cortexideSettingsService.state
+
+		// Detect if local provider for optimizations
+		const isLocal = modelSelection && modelSelection.providerName !== 'auto' ? isLocalProvider(modelSelection.providerName, settingsOfProvider) : false
+
+		// For local models, skip verbose AI instructions to reduce tokens
+		const combinedInstructions = (isLocal && featureName === 'Autocomplete')
+			? '' // Skip verbose AI instructions for local autocomplete
+			: this._getCombinedAIInstructions();
 
 		let prefix = `\
 ${!combinedInstructions ? '' : `\
@@ -1590,8 +1759,60 @@ ${combinedInstructions.split('\n').map(line => `//${line}`).join('\n')}`}
 
 ${messages.prefix}`
 
-		const suffix = messages.suffix
+		let suffix = messages.suffix
 		const stopTokens = messages.stopTokens
+
+		// Apply local token caps and smart truncation for local models
+		if (isLocal && featureName === 'Autocomplete') {
+			const autocompleteTokenCap = LOCAL_MODEL_TOKEN_CAPS['Autocomplete'] // 1,000 tokens
+			const maxChars = autocompleteTokenCap * CHARS_PER_TOKEN // ~4,000 chars
+
+			// Smart truncation: prioritize code near cursor, cut at line boundaries
+			const truncatePrefixSuffix = (text: string, maxChars: number, isPrefix: boolean): string => {
+				if (text.length <= maxChars) return text
+
+				// Split into lines for line-boundary truncation
+				const lines = text.split('\n')
+				let totalChars = 0
+				const resultLines: string[] = []
+
+				// For prefix: keep lines from the end (closest to cursor)
+				// For suffix: keep lines from the start (closest to cursor)
+				if (isPrefix) {
+					// Prefix: keep last lines (closest to cursor)
+					for (let i = lines.length - 1; i >= 0; i--) {
+						const line = lines[i]
+						const lineWithNewline = line + '\n'
+						if (totalChars + lineWithNewline.length > maxChars) break
+						resultLines.unshift(line)
+						totalChars += lineWithNewline.length
+					}
+					return resultLines.join('\n')
+				} else {
+					// Suffix: keep first lines (closest to cursor)
+					for (let i = 0; i < lines.length; i++) {
+						const line = lines[i]
+						const lineWithNewline = (i < lines.length - 1 ? line + '\n' : line)
+						if (totalChars + lineWithNewline.length > maxChars) break
+						resultLines.push(line)
+						totalChars += lineWithNewline.length
+					}
+					return resultLines.join('\n')
+				}
+			}
+
+			// Apply truncation to combined prefix+suffix, prioritizing code near cursor
+			const combinedLength = prefix.length + suffix.length
+			if (combinedLength > maxChars) {
+				// Allocate space proportionally, but favor suffix (code after cursor) slightly
+				const prefixMaxChars = Math.floor(maxChars * 0.45) // 45% for prefix
+				const suffixMaxChars = Math.floor(maxChars * 0.55) // 55% for suffix
+
+				prefix = truncatePrefixSuffix(prefix, prefixMaxChars, true)
+				suffix = truncatePrefixSuffix(suffix, suffixMaxChars, false)
+			}
+		}
+
 		return { prefix, suffix, stopTokens }
 	}
 

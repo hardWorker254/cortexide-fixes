@@ -23,7 +23,8 @@ import * as dom from '../../../../base/browser/dom.js';
 import { Widget } from '../../../../base/browser/ui/widget.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IConsistentEditorItemService, IConsistentItemService } from './helperServices/consistentItemService.js';
-import { voidPrefixAndSuffix, ctrlKStream_userMessage, ctrlKStream_systemMessage, defaultQuickEditFimTags, rewriteCode_systemMessage, rewriteCode_userMessage, searchReplaceGivenDescription_systemMessage, searchReplaceGivenDescription_userMessage, tripleTick, } from '../common/prompt/prompts.js';
+import { voidPrefixAndSuffix, ctrlKStream_userMessage, ctrlKStream_systemMessage, ctrlKStream_systemMessage_local, defaultQuickEditFimTags, rewriteCode_systemMessage, rewriteCode_systemMessage_local, rewriteCode_userMessage, searchReplaceGivenDescription_systemMessage, searchReplaceGivenDescription_userMessage, tripleTick, } from '../common/prompt/prompts.js';
+import { isLocalProvider } from './convertToLLMMessageService.js';
 import { ICortexideCommandBarService } from './cortexideCommandBarService.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { CORTEXIDE_ACCEPT_DIFF_ACTION_ID, CORTEXIDE_REJECT_DIFF_ACTION_ID } from './actionIDs.js';
@@ -46,6 +47,7 @@ import { deepClone } from '../../../../base/common/objects.js';
 import { acceptBg, acceptBorder, buttonFontSize, buttonTextColor, rejectBg, rejectBorder } from '../common/helpers/colors.js';
 import { DiffArea, Diff, CtrlKZone, CortexideFileSnapshot, DiffAreaSnapshotEntry, diffAreaSnapshotKeys, DiffZone, TrackingZone, ComputedDiff } from '../common/editCodeServiceTypes.js';
 import { IConvertToLLMMessageService } from './convertToLLMMessageService.js';
+import { IModelWarmupService } from '../common/modelWarmupService.js';
 // import { isMacintosh } from '../../../../base/common/platform.js';
 // import { CORTEXIDE_OPEN_SETTINGS_ACTION_ID } from './cortexideSettingsPane.js';
 
@@ -103,6 +105,33 @@ const getLeadingWhitespacePx = (editor: ICodeEditor, startLine: number): number 
 // Helper function to remove whitespace except newlines
 const removeWhitespaceExceptNewlines = (str: string): string => {
 	return str.replace(/[^\S\n]+/g, '');
+}
+
+// Helper function to prune code for local models: strip comments and reduce import verbosity
+// This reduces token usage for local models which are slower with large contexts
+const pruneCodeForLocalModel = (code: string, language: string): string => {
+	// For very small code blocks, don't prune (might break functionality)
+	if (code.length < 200) return code;
+
+	let pruned = code;
+
+	// Remove single-line comments (// ...)
+	pruned = pruned.replace(/\/\/.*$/gm, '');
+
+	// Remove multi-line comments (/* ... */)
+	pruned = pruned.replace(/\/\*[\s\S]*?\*\//g, '');
+
+	// Remove doc comments (/** ... */)
+	pruned = pruned.replace(/\/\*\*[\s\S]*?\*\//g, '');
+
+	// For languages with import statements, keep only essential imports
+	// This is conservative - we keep all imports but could be more aggressive
+	// The token caps already limit context size, so this is a secondary optimization
+
+	// Remove excessive blank lines (more than 2 consecutive)
+	pruned = pruned.replace(/\n{3,}/g, '\n\n');
+
+	return pruned.trim();
 }
 
 
@@ -196,6 +225,7 @@ class EditCodeService extends Disposable implements IEditCodeService {
 		// @IFileService private readonly _fileService: IFileService,
 		@ICortexideModelService private readonly _cortexideModelService: ICortexideModelService,
 		@IConvertToLLMMessageService private readonly _convertToLLMMessageService: IConvertToLLMMessageService,
+		@IModelWarmupService private readonly _modelWarmupService: IModelWarmupService,
 	) {
 		super();
 
@@ -1404,10 +1434,28 @@ class EditCodeService extends Disposable implements IEditCodeService {
 		const language = model.getLanguageId()
 		let messages: LLMChatMessage[]
 		let separateSystemMessage: string | undefined
+
+		// Detect if using local model for minimal prompts and code pruning
+		const isLocal = modelSelection && modelSelection.providerName !== 'auto' && isLocalProvider(modelSelection.providerName, this._settingsService.state.settingsOfProvider)
+
+		// Warm up local model in background (fire-and-forget, doesn't block)
+		// This reduces first-request latency for Ctrl+K/Apply on local models
+		if (modelSelection && modelSelection.providerName !== 'auto' && modelSelection.modelName !== 'auto') {
+			try {
+				this._modelWarmupService.warmupModelIfNeeded(modelSelection.providerName, modelSelection.modelName, featureName)
+			} catch (e) {
+				// Warm-up failures should never block edit flows - silently ignore
+				console.debug('[EditCodeService] Warm-up call failed (non-blocking):', e)
+			}
+		}
+
 		if (from === 'ClickApply') {
+			const systemMsg = isLocal ? rewriteCode_systemMessage_local : rewriteCode_systemMessage
+			// For local models, prune code to reduce token usage
+			const prunedOriginalCode = isLocal ? pruneCodeForLocalModel(originalCode, language) : originalCode
 			const { messages: a, separateSystemMessage: b } = this._convertToLLMMessageService.prepareLLMSimpleMessages({
-				systemMessage: rewriteCode_systemMessage,
-				simpleMessages: [{ role: 'user', content: rewriteCode_userMessage({ originalCode, applyStr: opts.applyStr, language }), }],
+				systemMessage: systemMsg,
+				simpleMessages: [{ role: 'user', content: rewriteCode_userMessage({ originalCode: prunedOriginalCode, applyStr: opts.applyStr, language }), }],
 				featureName,
 				modelSelection,
 			})
@@ -1422,10 +1470,17 @@ class EditCodeService extends Disposable implements IEditCodeService {
 			const startLine = startRange === 'fullFile' ? 1 : startRange[0]
 			const endLine = startRange === 'fullFile' ? model.getLineCount() : startRange[1]
 			const { prefix, suffix } = voidPrefixAndSuffix({ fullFileStr: originalFileCode, startLine, endLine })
-			const userContent = ctrlKStream_userMessage({ selection: originalCode, instructions: instructions, prefix, suffix, fimTags: quickEditFIMTags, language })
+			// For local models, prune code to reduce token usage
+			const prunedSelection = isLocal ? pruneCodeForLocalModel(originalCode, language) : originalCode
+			const prunedPrefix = isLocal ? pruneCodeForLocalModel(prefix, language) : prefix
+			const prunedSuffix = isLocal ? pruneCodeForLocalModel(suffix, language) : suffix
+			const userContent = ctrlKStream_userMessage({ selection: prunedSelection, instructions: instructions, prefix: prunedPrefix, suffix: prunedSuffix, fimTags: quickEditFIMTags, language })
 
+			const systemMsg = isLocal
+				? ctrlKStream_systemMessage_local({ quickEditFIMTags: quickEditFIMTags })
+				: ctrlKStream_systemMessage({ quickEditFIMTags: quickEditFIMTags })
 			const { messages: a, separateSystemMessage: b } = this._convertToLLMMessageService.prepareLLMSimpleMessages({
-				systemMessage: ctrlKStream_systemMessage({ quickEditFIMTags: quickEditFIMTags }),
+				systemMessage: systemMsg,
 				simpleMessages: [{ role: 'user', content: userContent, }],
 				featureName,
 				modelSelection,
@@ -1704,8 +1759,24 @@ class EditCodeService extends Disposable implements IEditCodeService {
 		const originalFileCode = model.getValue(EndOfLinePreference.LF)
 		const userMessageContent = searchReplaceGivenDescription_userMessage({ originalCode: originalFileCode, applyStr: applyStr })
 
+		// Detect if local provider for minimal prompts
+		const isLocal = modelSelection && modelSelection.providerName !== 'auto' && isLocalProvider(modelSelection.providerName, this._settingsService.state.settingsOfProvider)
+
+		// Warm up local model in background (fire-and-forget, doesn't block)
+		// This reduces first-request latency for Apply on local models
+		if (modelSelection && modelSelection.providerName !== 'auto' && modelSelection.modelName !== 'auto') {
+			try {
+				this._modelWarmupService.warmupModelIfNeeded(modelSelection.providerName, modelSelection.modelName, featureName)
+			} catch (e) {
+				// Warm-up failures should never block edit flows - silently ignore
+				console.debug('[EditCodeService] Warm-up call failed (non-blocking):', e)
+			}
+		}
+
+		const systemMsg = isLocal ? rewriteCode_systemMessage_local : searchReplaceGivenDescription_systemMessage
+
 		const { messages, separateSystemMessage: separateSystemMessage } = this._convertToLLMMessageService.prepareLLMSimpleMessages({
-			systemMessage: searchReplaceGivenDescription_systemMessage,
+			systemMessage: systemMsg,
 			simpleMessages: [{ role: 'user', content: userMessageContent, }],
 			featureName,
 			modelSelection,

@@ -507,6 +507,8 @@ export type GlobalSettings = {
 		indexerParallelism?: number; // Indexer parallelism limit (default: 2)
 		routerCacheTtlMs?: number; // Router cache TTL in ms (default: 2000)
 	};
+	// Local-First AI: When enabled, heavily bias router toward local models
+	localFirstAI?: boolean; // Prefer local models over cloud models (default: false)
 }
 
 export const defaultGlobalSettings: GlobalSettings = {
@@ -561,6 +563,7 @@ export const defaultGlobalSettings: GlobalSettings = {
 		indexerParallelism: 2, // 2 parallel workers (parallelism limit enabled)
 		routerCacheTtlMs: 2000, // 2 second cache TTL (caching enabled)
 	},
+	localFirstAI: false, // Local-First AI disabled by default (users can enable for privacy/performance)
 }
 
 export type GlobalSettingName = keyof GlobalSettings

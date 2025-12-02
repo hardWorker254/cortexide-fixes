@@ -6,15 +6,15 @@
 import '../../../../platform/update/common/update.config.contribution.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { IWorkbenchContributionsRegistry, Extensions as WorkbenchExtensions } from '../../../common/contributions.js';
+import { IWorkbenchContributionsRegistry, Extensions as WorkbenchExtensions, IWorkbenchContribution } from '../../../common/contributions.js';
 import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
 import { MenuId, registerAction2, Action2 } from '../../../../platform/actions/common/actions.js';
 import { ProductContribution, UpdateContribution, CONTEXT_UPDATE_STATE, SwitchProductQualityContribution, RELEASE_NOTES_URL, showReleaseNotesInEditor, DOWNLOAD_URL } from './update.js';
 import { LifecyclePhase } from '../../../services/lifecycle/common/lifecycle.js';
 import product from '../../../../platform/product/common/product.js';
-import { IUpdateService, StateType } from '../../../../platform/update/common/update.js';
+import { IUpdateService, StateType, State } from '../../../../platform/update/common/update.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { isWindows } from '../../../../base/common/platform.js';
+import { isWindows, isWeb } from '../../../../base/common/platform.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { mnemonicButtonLabel } from '../../../../base/common/labels.js';
 import { ShowCurrentReleaseNotesActionId, ShowCurrentReleaseNotesFromCurrentFileActionId } from '../common/update.js';
@@ -23,6 +23,10 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IProductService } from '../../../../platform/product/common/productService.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { IBannerService } from '../../../services/banner/browser/bannerService.js';
+import { ThemeIcon } from '../../../../base/common/themables.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 
 const workbench = Registry.as<IWorkbenchContributionsRegistry>(WorkbenchExtensions.Workbench);
 
@@ -233,3 +237,106 @@ if (isWindows) {
 
 	registerAction2(DeveloperApplyUpdateAction);
 }
+
+// Update Banner
+
+const UPDATE_BANNER_LATER_COMMAND = 'update.banner.later';
+const UPDATE_BANNER_INSTALL_COMMAND = 'update.banner.install';
+
+export class UpdateBannerContribution extends Disposable implements IWorkbenchContribution {
+
+	private static readonly BANNER_ID = 'update.banner';
+	private bannerShown = false;
+	private currentState: State | undefined;
+
+	constructor(
+		@IUpdateService private readonly updateService: IUpdateService,
+		@IBannerService private readonly bannerService: IBannerService,
+	) {
+		super();
+
+		// Register commands for banner actions
+		this.registerCommands();
+
+		// Listen to update state changes
+		this._register(this.updateService.onStateChange(state => this.onUpdateStateChange(state)));
+
+		// Check initial state
+		this.onUpdateStateChange(this.updateService.state);
+	}
+
+	private registerCommands(): void {
+		// Register "Later" command
+		CommandsRegistry.registerCommand(UPDATE_BANNER_LATER_COMMAND, () => {
+			if (this.bannerShown) {
+				this.bannerService.hide(UpdateBannerContribution.BANNER_ID);
+				this.bannerShown = false;
+			}
+		});
+
+		// Register "Install Now" command
+		CommandsRegistry.registerCommand(UPDATE_BANNER_INSTALL_COMMAND, () => {
+			if (!this.currentState) {
+				return;
+			}
+
+			if (this.currentState.type === StateType.Ready) {
+				this.updateService.quitAndInstall();
+			} else if (this.currentState.type === StateType.Downloaded) {
+				this.updateService.applyUpdate();
+			}
+		});
+	}
+
+	private onUpdateStateChange(state: State): void {
+		this.currentState = state;
+
+		// Only show banner for Ready or Downloaded states
+		// Don't show if updates are disabled or if we're on web
+		if (isWeb || state.type === StateType.Disabled || state.type === StateType.Uninitialized) {
+			if (this.bannerShown) {
+				this.bannerService.hide(UpdateBannerContribution.BANNER_ID);
+				this.bannerShown = false;
+			}
+			return;
+		}
+
+		// Show banner when update is ready or downloaded
+		if (state.type === StateType.Ready || state.type === StateType.Downloaded) {
+			if (!this.bannerShown) {
+				this.showBanner(state);
+			}
+		} else {
+			// Hide banner for other states
+			if (this.bannerShown) {
+				this.bannerService.hide(UpdateBannerContribution.BANNER_ID);
+				this.bannerShown = false;
+			}
+		}
+	}
+
+	private showBanner(state: State): void {
+		this.bannerService.show({
+			id: UpdateBannerContribution.BANNER_ID,
+			message: localize('updateBanner.message', 'New update available'),
+			icon: ThemeIcon.fromId('sync'),
+			actions: [
+				{
+					label: localize('updateBanner.later', 'Later'),
+					href: `command:${UPDATE_BANNER_LATER_COMMAND}`
+				},
+				{
+					label: localize('updateBanner.installNow', 'Install Now'),
+					href: `command:${UPDATE_BANNER_INSTALL_COMMAND}`
+				}
+			],
+			onClose: () => {
+				this.bannerShown = false;
+			}
+		});
+
+		this.bannerShown = true;
+	}
+}
+
+workbench.registerWorkbenchContribution(UpdateBannerContribution, LifecyclePhase.Restored);

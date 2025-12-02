@@ -22,6 +22,8 @@ import { ICortexideSettingsService } from '../common/cortexideSettingsService.js
 import { FeatureName } from '../common/cortexideSettingsTypes.js';
 import { IConvertToLLMMessageService } from './convertToLLMMessageService.js';
 import { getPerformanceHarness } from '../common/performanceHarness.js';
+import { isLocalProvider } from './convertToLLMMessageService.js';
+import { IModelWarmupService } from '../common/modelWarmupService.js';
 
 
 
@@ -539,13 +541,16 @@ type CompletionOptions = {
 	llmSuffix: string;
 	stopTokens: string[];
 };
-const getCompletionOptions = (prefixAndSuffix: PrefixAndSuffixInfo, relevantContext: string, justAcceptedAutocompletion: boolean): CompletionOptions => {
+const getCompletionOptions = (prefixAndSuffix: PrefixAndSuffixInfo, relevantContext: string, justAcceptedAutocompletion: boolean, isLocalProvider: boolean = false): CompletionOptions => {
 
 	let { prefix, suffix, prefixToTheLeftOfCursor, suffixToTheRightOfCursor, suffixLines, prefixLines } = prefixAndSuffix;
 
 	// trim prefix and suffix to not be very large
-	suffixLines = suffix.split(_ln).slice(0, 25);
-	prefixLines = prefix.split(_ln).slice(-25);
+	// For local providers, use smaller limits (10-15 lines) to reduce token count before FIM token capping
+	// This helps local models respond faster by reducing input size
+	const maxLines = isLocalProvider ? 12 : 25 // 12 lines for local (conservative), 25 for cloud
+	suffixLines = suffix.split(_ln).slice(0, maxLines);
+	prefixLines = prefix.split(_ln).slice(-maxLines);
 	prefix = prefixLines.join(_ln);
 	suffix = suffixLines.join(_ln);
 
@@ -784,7 +789,14 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 		// console.log('@@---------------------\n' + relevantSnippets)
 		const relevantContext = ''
 
-		const { shouldGenerate, predictionType, llmPrefix, llmSuffix, stopTokens } = getCompletionOptions(prefixAndSuffix, relevantContext, justAcceptedAutocompletion)
+		// Detect if using local provider for prefix/suffix optimization
+		const featureName: FeatureName = 'Autocomplete'
+		const modelSelection = this._settingsService.state.modelSelectionOfFeature[featureName]
+		const isLocal = modelSelection && modelSelection.providerName !== 'auto'
+			? isLocalProvider(modelSelection.providerName, this._settingsService.state.settingsOfProvider)
+			: false
+
+		const { shouldGenerate, predictionType, llmPrefix, llmSuffix, stopTokens } = getCompletionOptions(prefixAndSuffix, relevantContext, justAcceptedAutocompletion, isLocal)
 
 		if (!shouldGenerate) return []
 
@@ -809,13 +821,16 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 
 		console.log('starting autocomplete...', predictionType)
 
-		const featureName: FeatureName = 'Autocomplete'
 		const overridesOfModel = this._settingsService.state.overridesOfModel
-		const modelSelection = this._settingsService.state.modelSelectionOfFeature[featureName]
 		// Skip "auto" - it's not a real provider
 		const modelSelectionOptions = modelSelection && !(modelSelection.providerName === 'auto' && modelSelection.modelName === 'auto')
 			? this._settingsService.state.optionsOfModelSelection[featureName][modelSelection.providerName]?.[modelSelection.modelName]
 			: undefined
+
+		// Warm up local model in background (fire-and-forget, doesn't block)
+		if (modelSelection && modelSelection.providerName !== 'auto' && modelSelection.modelName !== 'auto') {
+			this._modelWarmupService.warmupModelIfNeeded(modelSelection.providerName, modelSelection.modelName, featureName)
+		}
 
 		// set parameters of `newAutocompletion` appropriately
 		newAutocompletion.llmPromise = new Promise((resolve, reject) => {
@@ -827,33 +842,39 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 						prefix: llmPrefix,
 						suffix: llmSuffix,
 						stopTokens: stopTokens,
-					}
+					},
+					modelSelection,
+					featureName,
 				}),
 				modelSelection,
 				modelSelectionOptions,
 				overridesOfModel,
 				logging: { loggingName: 'Autocomplete' },
-				onText: () => { }, // unused in FIMMessage
-				// onText: async ({ fullText, newText }) => {
+				onText: ({ fullText }) => {
+					// Update autocompletion text as it streams in for incremental UI updates
+					// This allows local models to show completions as they generate, improving perceived responsiveness
+					try {
+						// Process the streamed text (same processing as final message)
+						const [text, _] = extractCodeFromRegular({ text: fullText, recentlyAddedTextLen: 0 })
+						const processedText = processStartAndEndSpaces(text)
 
-				// 	newAutocompletion.insertText = fullText
+						// Update the autocompletion with partial text
+						// Note: This doesn't trigger UI refresh automatically, but ensures the final result is ready
+						// The UI will update when the promise resolves or when VS Code re-requests completions
+						newAutocompletion.insertText = processedText
 
-				// 	// count newlines in newText
-				// 	const numNewlines = newText.match(/\n|\r\n/g)?.length || 0
-				// 	newAutocompletion._newlineCount += numNewlines
+						// Count newlines for safety (prevent excessive multiline completions)
+						const numNewlines = (fullText.match(/\n|\r\n/g) || []).length
+						newAutocompletion._newlineCount = numNewlines
 
-				// 	// if too many newlines, resolve up to last newline
-				// 	if (newAutocompletion._newlineCount > 10) {
-				// 		const lastNewlinePos = fullText.lastIndexOf('\n')
-				// 		newAutocompletion.insertText = fullText.substring(0, lastNewlinePos)
-				// 		resolve(newAutocompletion.insertText)
-				// 		return
-				// 	}
-
-				// 	// if (!getAutocompletionMatchup({ prefix: this._lastPrefix, autocompletion: newAutocompletion })) {
-				// 	// 	reject('LLM response did not match user\'s text.')
-				// 	// }
-				// },
+						// Safety: If too many newlines during streaming, we could truncate, but let's wait for final
+						// The final handler will do proper truncation
+					} catch (e) {
+						// If streaming processing fails, log but don't break - fall back to final text
+						console.debug('[Autocomplete] Error processing streamed text:', e)
+						// Continue - onFinalMessage will handle the final text
+					}
+				},
 				onFinalMessage: ({ fullText }) => {
 
 					// console.log('____res: ', JSON.stringify(newAutocompletion.insertText))
@@ -930,7 +951,8 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 		@IEditorService private readonly _editorService: IEditorService,
 		@IModelService private readonly _modelService: IModelService,
 		@ICortexideSettingsService private readonly _settingsService: ICortexideSettingsService,
-		@IConvertToLLMMessageService private readonly _convertToLLMMessageService: IConvertToLLMMessageService
+		@IConvertToLLMMessageService private readonly _convertToLLMMessageService: IConvertToLLMMessageService,
+		@IModelWarmupService private readonly _modelWarmupService: IModelWarmupService
 		// @IContextGatheringService private readonly _contextGatheringService: IContextGatheringService,
 	) {
 		super()
