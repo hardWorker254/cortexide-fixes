@@ -9,7 +9,7 @@ import _filter from 'gulp-filter';
 import rename from 'gulp-rename';
 import path from 'path';
 import fs from 'fs';
-import * as rimraf from 'rimraf';
+import * as rimrafModule from 'rimraf';
 import VinylFile from 'vinyl';
 import { ThroughStream } from 'through';
 import sm from 'source-map';
@@ -297,7 +297,7 @@ export function rimraf(dir: string): () => Promise<void> {
 		let retries = 0;
 
 		const retry = () => {
-			rimraf(dir, { maxBusyTries: 1 }, (err: any) => {
+			rimrafModule(dir, { maxBusyTries: 1 }, (err: any) => {
 				if (!err) {
 					return c();
 				}

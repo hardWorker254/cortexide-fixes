@@ -30,7 +30,7 @@ const gulp_filter_1 = require("gulp-filter");
 const gulp_rename_1 = require("gulp-rename");
 const path = require("path");
 const fs = require("fs");
-const rimraf = require("rimraf");
+const rimrafModule = require("rimraf");
 const url_1 = require("url");
 const ternary_stream_1 = require("ternary-stream");
 const root = path.dirname(path.dirname(__dirname));
@@ -242,7 +242,7 @@ function rimraf(dir) {
     const result = () => new Promise((c, e) => {
         let retries = 0;
         const retry = () => {
-            rimraf(dir, { maxBusyTries: 1 }, (err) => {
+            rimrafModule(dir, { maxBusyTries: 1 }, (err) => {
                 if (!err) {
                     return c();
                 }
