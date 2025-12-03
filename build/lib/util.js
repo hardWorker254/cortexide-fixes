@@ -28,12 +28,12 @@ const event_stream_1 = require("event-stream");
 const debounce_1 = require("debounce");
 const gulp_filter_1 = require("gulp-filter");
 const gulp_rename_1 = require("gulp-rename");
-const path_1 = require("path");
-const fs_1 = require("fs");
+const path = require("path");
+const fs = require("fs");
 const rimraf_1 = require("rimraf");
 const url_1 = require("url");
 const ternary_stream_1 = require("ternary-stream");
-const root = path_1.default.dirname(path_1.default.dirname(__dirname));
+const root = path.dirname(path.dirname(__dirname));
 const NoCancellationToken = { isCancellationRequested: () => false };
 function incremental(streamProvider, initial, supportsCancellation) {
     const input = event_stream_1.default.through();
@@ -146,7 +146,7 @@ function skipDirectories() {
     });
 }
 function cleanNodeModules(rulePath) {
-    const rules = fs_1.default.readFileSync(rulePath, 'utf8')
+    const rules = fs.default.readFileSync(rulePath, 'utf8')
         .split(/\r?\n/g)
         .map(line => line.trim())
         .filter(line => line && !/^#/.test(line));
@@ -187,7 +187,7 @@ function loadSourcemaps() {
             return;
         }
         f.contents = Buffer.from(contents.replace(/\/\/# sourceMappingURL=(.*)$/g, ''), 'utf8');
-        fs_1.default.readFile(path_1.default.join(path_1.default.dirname(f.path), lastMatch[1]), 'utf8', (err, contents) => {
+        fs.default.readFile(path.default.join(path.default.dirname(f.path), lastMatch[1]), 'utf8', (err, contents) => {
             if (err) {
                 return cb(err);
             }
@@ -232,7 +232,7 @@ function rewriteSourceMappingURL(sourceMappingURLBase) {
     const output = input
         .pipe(event_stream_1.default.mapSync(f => {
         const contents = f.contents.toString('utf8');
-        const str = `//# sourceMappingURL=${sourceMappingURLBase}/${path_1.default.dirname(f.relative).replace(/\\/g, '/')}/$1`;
+        const str = `//# sourceMappingURL=${sourceMappingURLBase}/${path.default.dirname(f.relative).replace(/\\/g, '/')}/$1`;
         f.contents = Buffer.from(contents.replace(/\n\/\/# sourceMappingURL=(.*)$/gm, str));
         return f;
     }));
@@ -254,14 +254,14 @@ function rimraf(dir) {
         };
         retry();
     });
-    result.taskName = `clean-${path_1.default.basename(dir).toLowerCase()}`;
+    result.taskName = `clean-${path.default.basename(dir).toLowerCase()}`;
     return result;
 }
 function _rreaddir(dirPath, prepend, result) {
-    const entries = fs_1.default.readdirSync(dirPath, { withFileTypes: true });
+    const entries = fs.default.readdirSync(dirPath, { withFileTypes: true });
     for (const entry of entries) {
         if (entry.isDirectory()) {
-            _rreaddir(path_1.default.join(dirPath, entry.name), `${prepend}/${entry.name}`, result);
+            _rreaddir(path.default.join(dirPath, entry.name), `${prepend}/${entry.name}`, result);
         }
         else {
             result.push(`${prepend}/${entry.name}`);
@@ -274,16 +274,16 @@ function rreddir(dirPath) {
     return result;
 }
 function ensureDir(dirPath) {
-    if (fs_1.default.existsSync(dirPath)) {
+    if (fs.default.existsSync(dirPath)) {
         return;
     }
-    ensureDir(path_1.default.dirname(dirPath));
-    fs_1.default.mkdirSync(dirPath);
+    ensureDir(path.default.dirname(dirPath));
+    fs.default.mkdirSync(dirPath);
 }
 function rebase(count) {
     return (0, gulp_rename_1.default)(f => {
         const parts = f.dirname ? f.dirname.split(/[\/\\]/) : [];
-        f.dirname = parts.slice(count).join(path_1.default.sep);
+        f.dirname = parts.slice(count).join(path.default.sep);
     });
 }
 function filter(fn) {
@@ -305,7 +305,7 @@ function streamToPromise(stream) {
     });
 }
 function getElectronVersion() {
-    const npmrc = fs_1.default.readFileSync(path_1.default.join(root, '.npmrc'), 'utf8');
+    const npmrc = fs.default.readFileSync(path.default.join(root, '.npmrc'), 'utf8');
     const electronVersion = /^target="(.*)"$/m.exec(npmrc)[1];
     const msBuildId = /^ms_build_id="(.*)"$/m.exec(npmrc)[1];
     return { electronVersion, msBuildId };
