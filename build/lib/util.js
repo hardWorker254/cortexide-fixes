@@ -36,8 +36,8 @@ const ternary_stream_1 = require("ternary-stream");
 const root = path.dirname(path.dirname(__dirname));
 const NoCancellationToken = { isCancellationRequested: () => false };
 function incremental(streamProvider, initial, supportsCancellation) {
-    const input = event_stream_1.default.through();
-    const output = event_stream_1.default.through();
+    const input = event_stream_1.through();
+    const output = event_stream_1.through();
     let state = 'idle';
     let buffer = Object.create(null);
     const token = !supportsCancellation ? undefined : { isCancellationRequested: () => Object.keys(buffer).length > 0 };
@@ -46,7 +46,7 @@ function incremental(streamProvider, initial, supportsCancellation) {
         const stream = !supportsCancellation ? streamProvider() : streamProvider(isCancellable ? token : NoCancellationToken);
         input
             .pipe(stream)
-            .pipe(event_stream_1.default.through(undefined, () => {
+            .pipe(event_stream_1.through(undefined, () => {
             state = 'idle';
             eventuallyRun();
         }))
@@ -62,7 +62,7 @@ function incremental(streamProvider, initial, supportsCancellation) {
         }
         const data = paths.map(path => buffer[path]);
         buffer = Object.create(null);
-        run(event_stream_1.default.readArray(data), true);
+        run(event_stream_1.readArray(data), true);
     }, 500);
     input.on('data', (f) => {
         buffer[f.path] = f;
@@ -70,16 +70,16 @@ function incremental(streamProvider, initial, supportsCancellation) {
             eventuallyRun();
         }
     });
-    return event_stream_1.default.duplex(input, output);
+    return event_stream_1.duplex(input, output);
 }
 function debounce(task, duration = 500) {
-    const input = event_stream_1.default.through();
-    const output = event_stream_1.default.through();
+    const input = event_stream_1.through();
+    const output = event_stream_1.through();
     let state = 'idle';
     const run = () => {
         state = 'running';
         task()
-            .pipe(event_stream_1.default.through(undefined, () => {
+            .pipe(event_stream_1.through(undefined, () => {
             const shouldRunAgain = state === 'stale';
             state = 'idle';
             if (shouldRunAgain) {
@@ -98,13 +98,13 @@ function debounce(task, duration = 500) {
             state = 'stale';
         }
     });
-    return event_stream_1.default.duplex(input, output);
+    return event_stream_1.duplex(input, output);
 }
 function fixWin32DirectoryPermissions() {
     if (!/win32/.test(process.platform)) {
-        return event_stream_1.default.through();
+        return event_stream_1.through();
     }
-    return event_stream_1.default.mapSync(f => {
+    return event_stream_1.mapSync(f => {
         if (f.stat && f.stat.isDirectory && f.stat.isDirectory()) {
             f.stat.mode = 16877;
         }
@@ -112,7 +112,7 @@ function fixWin32DirectoryPermissions() {
     });
 }
 function setExecutableBit(pattern) {
-    const setBit = event_stream_1.default.mapSync(f => {
+    const setBit = event_stream_1.mapSync(f => {
         if (!f.stat) {
             const stat = { isFile() { return true; }, mode: 0 };
             f.stat = stat;
@@ -123,13 +123,13 @@ function setExecutableBit(pattern) {
     if (!pattern) {
         return setBit;
     }
-    const input = event_stream_1.default.through();
+    const input = event_stream_1.through();
     const filter = (0, gulp_filter_1.default)(pattern, { restore: true });
     const output = input
         .pipe(filter)
         .pipe(setBit)
         .pipe(filter.restore);
-    return event_stream_1.default.duplex(input, output);
+    return event_stream_1.duplex(input, output);
 }
 function toFileUri(filePath) {
     const match = filePath.match(/^([a-z])\:(.*)$/i);
@@ -139,7 +139,7 @@ function toFileUri(filePath) {
     return 'file://' + filePath.replace(/\\/g, '/');
 }
 function skipDirectories() {
-    return event_stream_1.default.mapSync(f => {
+    return event_stream_1.mapSync(f => {
         if (!f.isDirectory()) {
             return f;
         }
@@ -152,14 +152,14 @@ function cleanNodeModules(rulePath) {
         .filter(line => line && !/^#/.test(line));
     const excludes = rules.filter(line => !/^!/.test(line)).map(line => `!**/node_modules/${line}`);
     const includes = rules.filter(line => /^!/.test(line)).map(line => `**/node_modules/${line.substr(1)}`);
-    const input = event_stream_1.default.through();
-    const output = event_stream_1.default.merge(input.pipe((0, gulp_filter_1.default)(['**', ...excludes])), input.pipe((0, gulp_filter_1.default)(includes)));
-    return event_stream_1.default.duplex(input, output);
+    const input = event_stream_1.through();
+    const output = event_stream_1.merge(input.pipe((0, gulp_filter_1.default)(['**', ...excludes])), input.pipe((0, gulp_filter_1.default)(includes)));
+    return event_stream_1.duplex(input, output);
 }
 function loadSourcemaps() {
-    const input = event_stream_1.default.through();
+    const input = event_stream_1.through();
     const output = input
-        .pipe(event_stream_1.default.map((f, cb) => {
+        .pipe(event_stream_1.map((f, cb) => {
         if (f.sourceMap) {
             cb(undefined, f);
             return;
@@ -195,20 +195,20 @@ function loadSourcemaps() {
             cb(undefined, f);
         });
     }));
-    return event_stream_1.default.duplex(input, output);
+    return event_stream_1.duplex(input, output);
 }
 function stripSourceMappingURL() {
-    const input = event_stream_1.default.through();
+    const input = event_stream_1.through();
     const output = input
-        .pipe(event_stream_1.default.mapSync(f => {
+        .pipe(event_stream_1.mapSync(f => {
         const contents = f.contents.toString('utf8');
         f.contents = Buffer.from(contents.replace(/\n\/\/# sourceMappingURL=(.*)$/gm, ''), 'utf8');
         return f;
     }));
-    return event_stream_1.default.duplex(input, output);
+    return event_stream_1.duplex(input, output);
 }
 /** Splits items in the stream based on the predicate, sending them to onTrue if true, or onFalse otherwise */
-function $if(test, onTrue, onFalse = event_stream_1.default.through()) {
+function $if(test, onTrue, onFalse = event_stream_1.through()) {
     if (typeof test === 'boolean') {
         return test ? onTrue : onFalse;
     }
@@ -216,27 +216,27 @@ function $if(test, onTrue, onFalse = event_stream_1.default.through()) {
 }
 /** Operator that appends the js files' original path a sourceURL, so debug locations map */
 function appendOwnPathSourceURL() {
-    const input = event_stream_1.default.through();
+    const input = event_stream_1.through();
     const output = input
-        .pipe(event_stream_1.default.mapSync(f => {
+        .pipe(event_stream_1.mapSync(f => {
         if (!(f.contents instanceof Buffer)) {
             throw new Error(`contents of ${f.path} are not a buffer`);
         }
         f.contents = Buffer.concat([f.contents, Buffer.from(`\n//# sourceURL=${(0, url_1.pathToFileURL)(f.path)}`)]);
         return f;
     }));
-    return event_stream_1.default.duplex(input, output);
+    return event_stream_1.duplex(input, output);
 }
 function rewriteSourceMappingURL(sourceMappingURLBase) {
-    const input = event_stream_1.default.through();
+    const input = event_stream_1.through();
     const output = input
-        .pipe(event_stream_1.default.mapSync(f => {
+        .pipe(event_stream_1.mapSync(f => {
         const contents = f.contents.toString('utf8');
         const str = `//# sourceMappingURL=${sourceMappingURLBase}/${path.dirname(f.relative).replace(/\\/g, '/')}/$1`;
         f.contents = Buffer.from(contents.replace(/\n\/\/# sourceMappingURL=(.*)$/gm, str));
         return f;
     }));
-    return event_stream_1.default.duplex(input, output);
+    return event_stream_1.duplex(input, output);
 }
 function rimraf(dir) {
     const result = () => new Promise((c, e) => {
@@ -287,7 +287,7 @@ function rebase(count) {
     });
 }
 function filter(fn) {
-    const result = event_stream_1.default.through(function (data) {
+    const result = event_stream_1.through(function (data) {
         if (fn(data)) {
             this.emit('data', data);
         }
@@ -295,7 +295,7 @@ function filter(fn) {
             result.restore.push(data);
         }
     });
-    result.restore = event_stream_1.default.through();
+    result.restore = event_stream_1.through();
     return result;
 }
 function streamToPromise(stream) {
