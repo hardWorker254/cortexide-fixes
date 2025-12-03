@@ -48,7 +48,7 @@ class TypeScriptLanguageServiceHost {
             return this.ts.ScriptSnapshot.fromString(this.topLevelFiles.get(fileName));
         }
         else {
-            return typescript_1.default.ScriptSnapshot.fromString(node_fs.readFileSync(fileName).toString());
+            return typescript_1.default.ScriptSnapshot.fromString(fs.readFileSync(fileName).toString());
         }
     }
     getScriptKind(_fileName) {

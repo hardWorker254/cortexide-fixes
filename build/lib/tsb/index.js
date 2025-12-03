@@ -80,7 +80,7 @@ function create(projectPath, existingOptions, config, onError = _defaultOnError)
         printDiagnostic(parsed.error);
         return createNullCompiler();
     }
-    const cmdLine = typescript_1.default.parseJsonConfigFileContent(parsed.config, typescript_1.default.sys, (0, path_1.dirname)(projectPath), existingOptions);
+    const cmdLine = typescript_1.default.parseJsonConfigFileContent(parsed.config, typescript_1.default.sys, (0, path.dirname)(projectPath), existingOptions);
     if (cmdLine.errors.length > 0) {
         cmdLine.errors.forEach(printDiagnostic);
         return createNullCompiler();
@@ -157,7 +157,7 @@ function create(projectPath, existingOptions, config, onError = _defaultOnError)
                         contents: (0, fs_1.readFileSync)(path),
                         stat: (0, fs_1.statSync)(path),
                         cwd: opts && opts.cwd,
-                        base: opts && opts.base || (0, path_1.dirname)(projectPath)
+                        base: opts && opts.base || (0, path.dirname)(projectPath)
                     }));
                 }
                 if (_pos >= _fileNames.length) {
