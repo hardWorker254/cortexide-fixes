@@ -6,8 +6,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getExtensionStream = getExtensionStream;
 exports.getBuiltInExtensions = getBuiltInExtensions;
-const fs_1 = require("fs");
-const path_1 = require("path");
+const fs = require("fs");
+const path = require("path");
 const os_1 = require("os");
 const rimraf_1 = require("rimraf");
 const event_stream_1 = require("event-stream");
@@ -16,11 +16,11 @@ const vinyl_fs_1 = require("vinyl-fs");
 const ext = require("./extensions");
 const fancy_log_1 = require("fancy-log");
 const ansi_colors_1 = require("ansi-colors");
-const root = path_1.default.dirname(path_1.default.dirname(__dirname));
-const productjson = JSON.parse(fs_1.default.readFileSync(path_1.default.join(__dirname, '../../product.json'), 'utf8'));
+const root = path.dirname(path.dirname(__dirname));
+const productjson = JSON.parse(fs.readFileSync(path.join(__dirname, '../../product.json'), 'utf8'));
 const builtInExtensions = productjson.builtInExtensions || [];
 const webBuiltInExtensions = productjson.webBuiltInExtensions || [];
-const controlFilePath = path_1.default.join(os_1.default.homedir(), '.vscode-oss-dev', 'extensions', 'control.json');
+const controlFilePath = path.join(os_1.default.homedir(), '.vscode-oss-dev', 'extensions', 'control.json');
 const ENABLE_LOGGING = !process.env['VSCODE_BUILD_BUILTIN_EXTENSIONS_SILENCE_PLEASE'];
 function log(...messages) {
     if (ENABLE_LOGGING) {
@@ -28,14 +28,14 @@ function log(...messages) {
     }
 }
 function getExtensionPath(extension) {
-    return path_1.default.join(root, '.build', 'builtInExtensions', extension.name);
+    return path.join(root, '.build', 'builtInExtensions', extension.name);
 }
 function isUpToDate(extension) {
-    const packagePath = path_1.default.join(getExtensionPath(extension), 'package.json');
-    if (!fs_1.default.existsSync(packagePath)) {
+    const packagePath = path.join(getExtensionPath(extension), 'package.json');
+    if (!fs.existsSync(packagePath)) {
         return false;
     }
-    const packageContents = fs_1.default.readFileSync(packagePath, { encoding: 'utf8' });
+    const packageContents = fs.readFileSync(packagePath, { encoding: 'utf8' });
     try {
         const diskVersion = JSON.parse(packageContents).version;
         return (diskVersion === extension.version);
@@ -47,7 +47,7 @@ function isUpToDate(extension) {
 function getExtensionDownloadStream(extension) {
     let input;
     if (extension.vsix) {
-        input = ext.fromVsix(path_1.default.join(root, extension.vsix), extension);
+        input = ext.fromVsix(path.join(root, extension.vsix), extension);
     }
     else if (productjson.extensionsGallery?.serviceUrl) {
         input = ext.fromMarketplace(productjson.extensionsGallery.serviceUrl, extension);
@@ -61,7 +61,7 @@ function getExtensionStream(extension) {
     // if the extension exists on disk, use those files instead of downloading anew
     if (isUpToDate(extension)) {
         log('[extensions]', `${extension.name}@${extension.version} up to date`, ansi_colors_1.default.green('✔︎'));
-        return vinyl_fs_1.default.src(['**'], { cwd: getExtensionPath(extension), dot: true })
+        return vinyl_fs.src(['**'], { cwd: getExtensionPath(extension), dot: true })
             .pipe((0, gulp_rename_1.default)(p => p.dirname = `${extension.name}/${p.dirname}`));
     }
     return getExtensionDownloadStream(extension);
@@ -75,7 +75,7 @@ function syncMarketplaceExtension(extension) {
     }
     rimraf_1.default.sync(getExtensionPath(extension));
     return getExtensionDownloadStream(extension)
-        .pipe(vinyl_fs_1.default.dest('.build/builtInExtensions'))
+        .pipe(vinyl_fs.dest('.build/builtInExtensions'))
         .on('end', () => log(source, extension.name, ansi_colors_1.default.green('✔︎')));
 }
 function syncExtension(extension, controlState) {
@@ -93,11 +93,11 @@ function syncExtension(extension, controlState) {
         case 'marketplace':
             return syncMarketplaceExtension(extension);
         default:
-            if (!fs_1.default.existsSync(controlState)) {
+            if (!fs.existsSync(controlState)) {
                 log(ansi_colors_1.default.red(`Error: Built-in extension '${extension.name}' is configured to run from '${controlState}' but that path does not exist.`));
                 return event_stream_1.default.readArray([]);
             }
-            else if (!fs_1.default.existsSync(path_1.default.join(controlState, 'package.json'))) {
+            else if (!fs.existsSync(path.join(controlState, 'package.json'))) {
                 log(ansi_colors_1.default.red(`Error: Built-in extension '${extension.name}' is configured to run from '${controlState}' but there is no 'package.json' file in that directory.`));
                 return event_stream_1.default.readArray([]);
             }
@@ -107,15 +107,15 @@ function syncExtension(extension, controlState) {
 }
 function readControlFile() {
     try {
-        return JSON.parse(fs_1.default.readFileSync(controlFilePath, 'utf8'));
+        return JSON.parse(fs.readFileSync(controlFilePath, 'utf8'));
     }
     catch (err) {
         return {};
     }
 }
 function writeControlFile(control) {
-    fs_1.default.mkdirSync(path_1.default.dirname(controlFilePath), { recursive: true });
-    fs_1.default.writeFileSync(controlFilePath, JSON.stringify(control, null, 2));
+    fs.mkdirSync(path.dirname(controlFilePath), { recursive: true });
+    fs.writeFileSync(controlFilePath, JSON.stringify(control, null, 2));
 }
 function getBuiltInExtensions() {
     log('Synchronizing built-in extensions...');
