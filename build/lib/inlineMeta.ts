@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import es from 'event-stream';
-import { basename } from 'path';
+import * as es from 'event-stream';
+import * as path from 'path';
 import File from 'vinyl';
 
 export interface IInlineMetaContext {
@@ -52,7 +52,7 @@ export function inlineMeta(result: NodeJS.ReadWriteStream, ctx: IInlineMetaConte
 
 function matchesFile(file: File, ctx: IInlineMetaContext): boolean {
 	for (const targetPath of ctx.targetPaths) {
-		if (file.basename === basename(targetPath)) { // TODO would be nicer to figure out root relative path to not match on false positives
+		if (file.basename === path.basename(targetPath)) { // TODO would be nicer to figure out root relative path to not match on false positives
 			return true;
 		}
 	}

@@ -9,12 +9,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getVariableNameValidator = getVariableNameValidator;
 const fs = require("fs");
-const path_1 = __importDefault(require("path"));
+const path = require("path");
 const RE_VAR_PROP = /var\(\s*(--([\w\-\.]+))/g;
 let knownVariables;
 function getKnownVariableNames() {
     if (!knownVariables) {
-        const knownVariablesFileContent = (0, fs_1.readFileSync)(path.join(__dirname, './vscode-known-variables.json'), 'utf8').toString();
+        const knownVariablesFileContent = fs.readFileSync(path.join(__dirname, './vscode-known-variables.json'), 'utf8').toString();
         const knownVariablesInfo = JSON.parse(knownVariablesFileContent);
         knownVariables = new Set([...knownVariablesInfo.colors, ...knownVariablesInfo.others]);
     }

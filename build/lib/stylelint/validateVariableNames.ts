@@ -3,15 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { readFileSync } from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const RE_VAR_PROP = /var\(\s*(--([\w\-\.]+))/g;
 
 let knownVariables: Set<string> | undefined;
 function getKnownVariableNames() {
 	if (!knownVariables) {
-		const knownVariablesFileContent = readFileSync(path.join(__dirname, './vscode-known-variables.json'), 'utf8').toString();
+		const knownVariablesFileContent = fs.readFileSync(path.join(__dirname, './vscode-known-variables.json'), 'utf8').toString();
 		const knownVariablesInfo = JSON.parse(knownVariablesFileContent);
 		knownVariables = new Set([...knownVariablesInfo.colors, ...knownVariablesInfo.others] as string[]);
 	}
