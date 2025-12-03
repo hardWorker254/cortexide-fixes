@@ -8,7 +8,7 @@ exports.getExtensionStream = getExtensionStream;
 exports.getBuiltInExtensions = getBuiltInExtensions;
 const fs = require("fs");
 const path = require("path");
-const os_1 = require("os");
+const os = require("os");
 const rimraf_1 = require("rimraf");
 const event_stream_1 = require("event-stream");
 const gulp_rename_1 = require("gulp-rename");
@@ -20,7 +20,7 @@ const root = path.dirname(path.dirname(__dirname));
 const productjson = JSON.parse(fs.readFileSync(path.join(__dirname, '../../product.json'), 'utf8'));
 const builtInExtensions = productjson.builtInExtensions || [];
 const webBuiltInExtensions = productjson.webBuiltInExtensions || [];
-const controlFilePath = path.join(os_1.default.homedir(), '.vscode-oss-dev', 'extensions', 'control.json');
+const controlFilePath = path.join(os.homedir(), '.vscode-oss-dev', 'extensions', 'control.json');
 const ENABLE_LOGGING = !process.env['VSCODE_BUILD_BUILTIN_EXTENSIONS_SILENCE_PLEASE'];
 function log(...messages) {
     if (ENABLE_LOGGING) {
