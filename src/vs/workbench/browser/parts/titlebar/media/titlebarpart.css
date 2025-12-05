@@ -52,6 +52,12 @@
 	overflow: visible;
 }
 
+.monaco-workbench.windows .part.titlebar > .titlebar-container {
+	/* Fix for menubar dropdown menu clipping issue on Windows */
+	/* Allows fixed-position dropdown menus to escape container boundaries */
+	overflow: visible;
+}
+
 /* Draggable region */
 .monaco-workbench .part.titlebar > .titlebar-container > .titlebar-drag-region {
 	top: 0;
