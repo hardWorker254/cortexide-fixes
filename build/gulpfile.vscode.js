@@ -373,7 +373,19 @@ function packageTask(platform, arch, sourceFolderName, destinationFolderName, op
 			.pipe(util.skipDirectories())
 			.pipe(util.fixWin32DirectoryPermissions())
 			.pipe(filter(['**', '!**/.github/**'], { dot: true })) // https://github.com/microsoft/vscode/issues/116523
-			.pipe(electron({ ...config, platform, arch: arch === 'armhf' ? 'arm' : arch, ffmpegChromium: false }))
+
+		// CORTEXIDE/VSCODIUM: Support custom Electron repositories for alternative architectures
+		// This allows using VSCODE_ELECTRON_REPOSITORY and VSCODE_ELECTRON_TAG env vars
+		let electronOverride = {};
+		if (process.env.VSCODE_ELECTRON_REPOSITORY) {
+			electronOverride.repo = process.env.VSCODE_ELECTRON_REPOSITORY;
+		}
+		if (process.env.VSCODE_ELECTRON_TAG) {
+			electronOverride.tag = process.env.VSCODE_ELECTRON_TAG;
+		}
+		const hasElectronOverride = electronOverride.repo || electronOverride.tag;
+
+			.pipe(electron({ ...config, ...(hasElectronOverride ? electronOverride : {}), platform, arch: arch === 'armhf' ? 'arm' : arch, ffmpegChromium: false }))
 			.pipe(filter(['**', '!LICENSE', '!version'], { dot: true }));
 
 		if (platform === 'linux') {
