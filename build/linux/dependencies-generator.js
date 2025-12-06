@@ -83,21 +83,15 @@ async function getDependencies(packageType, buildDir, applicationName, arch) {
     const referenceGeneratedDeps = packageType === 'deb' ?
         dep_lists_1.referenceGeneratedDepsByArch[arch] :
         dep_lists_2.referenceGeneratedDepsByArch[arch];
-    // Skip validation for newly added architectures until we have actual dependency data
-    const newArchitectures = ['ppc64el', 'riscv64', 'loong64'];
-    const skipValidation = newArchitectures.includes(arch);
     if (JSON.stringify(sortedDependencies) !== JSON.stringify(referenceGeneratedDeps)) {
         const failMessage = 'The dependencies list has changed.'
             + '\nOld:\n' + referenceGeneratedDeps.join('\n')
             + '\nNew:\n' + sortedDependencies.join('\n');
-        if (FAIL_BUILD_FOR_NEW_DEPENDENCIES && !skipValidation) {
+        if (FAIL_BUILD_FOR_NEW_DEPENDENCIES) {
             throw new Error(failMessage);
         }
         else {
             console.warn(failMessage);
-            if (skipValidation) {
-                console.warn(`Skipping dependency validation for ${arch} (newly added architecture)`);
-            }
         }
     }
     return sortedDependencies;
