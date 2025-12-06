@@ -154,6 +154,10 @@ export async function getVSCodeSysroot(arch: DebianArchString, isMusl: boolean =
 			expectedName = `arm-rpi-linux-gnueabihf${prefix}.tar.gz`;
 			triple = 'arm-rpi-linux-gnueabihf';
 			break;
+		case 's390x':
+			expectedName = `s390x-linux-gnu${prefix}.tar.gz`;
+			triple = 's390x-linux-gnu';
+			break;
 	}
 	console.log(`Fetching ${expectedName} for ${triple}`);
 	const checksumSha256 = getVSCodeSysrootChecksum(expectedName);
