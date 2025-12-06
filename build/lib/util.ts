@@ -9,7 +9,7 @@ import _filter from 'gulp-filter';
 import rename from 'gulp-rename';
 import path from 'path';
 import fs from 'fs';
-import * as rimrafModule from 'rimraf';
+
 import VinylFile from 'vinyl';
 import { ThroughStream } from 'through';
 import sm from 'source-map';
@@ -17,6 +17,9 @@ import { pathToFileURL } from 'url';
 import ternaryStream from 'ternary-stream';
 
 const root = path.dirname(path.dirname(__dirname));
+
+// Use require for rimraf 2.2.8 (CommonJS module, no default export)
+const rimrafModule = require('rimraf');
 
 export interface ICancellationToken {
 	isCancellationRequested(): boolean;
