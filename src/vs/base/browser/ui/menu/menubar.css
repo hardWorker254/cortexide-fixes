@@ -56,6 +56,13 @@
 	border-radius: 5px;
 }
 
+/* Standalone rule for when menu is appended to document.body (Windows) */
+.menubar-menu-items-holder {
+	position: fixed;
+	opacity: 1;
+	z-index: 3500;
+}
+
 .menubar .menubar-menu-items-holder {
 	position: fixed;
 	left: 0px;
@@ -65,6 +72,16 @@
 
 .menubar.compact .menubar-menu-items-holder {
 	position: fixed;
+}
+
+/* Standalone rule for when menu is appended to document.body (Windows) */
+.menubar-menu-items-holder.monaco-menu-container {
+	outline: 0;
+	border: none;
+}
+
+.menubar-menu-items-holder.monaco-menu-container :focus {
+	outline: 0;
 }
 
 .menubar .menubar-menu-items-holder.monaco-menu-container {
