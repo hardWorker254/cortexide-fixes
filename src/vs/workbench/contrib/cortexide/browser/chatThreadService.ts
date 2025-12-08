@@ -818,7 +818,20 @@ class ChatThreadService extends Disposable implements IChatThreadService {
 			return name.includes('3.5') || name.includes('3.7') || name.includes('4') || name.includes('opus') || name.includes('sonnet');
 		}
 		if (provider === 'openai') {
-			return name.includes('4o') || name.includes('4.1') || name.includes('gpt-4');
+			// GPT-5 series (all variants support vision)
+			if (name.includes('gpt-5') || name.includes('gpt-5.1')) return true;
+			// GPT-4.1 series
+			if (name.includes('4.1')) return true;
+			// GPT-4o series
+			if (name.includes('4o')) return true;
+			// o-series reasoning models (o1, o3, o4-mini support vision)
+			if (name.startsWith('o1') || name.startsWith('o3') || name.startsWith('o4')) return true;
+			// Legacy GPT-4 models
+			if (name.includes('gpt-4')) return true;
+		}
+		if (provider === 'mistral') {
+			// Pixtral models support vision
+			if (name.includes('pixtral')) return true;
 		}
 		if (provider === 'ollama' || provider === 'vllm') {
 			return name.includes('llava') || name.includes('bakllava') || name.includes('vision');

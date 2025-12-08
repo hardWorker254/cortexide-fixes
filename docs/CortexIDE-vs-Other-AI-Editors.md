@@ -340,7 +340,7 @@ This comparison is based on:
 **CortexIDE**: ✅ **Yes** - Extensive model support verified in `modelCapabilities.ts`:
 - **15+ providers**: OpenAI, Anthropic, xAI, Gemini, DeepSeek, Groq, Mistral, OpenRouter, Ollama, vLLM, LM Studio, OpenAI-compatible, LiteLLM, Google Vertex, Microsoft Azure, AWS Bedrock
 - **Reasoning models**: o1, o3, Claude 3.7/4, DeepSeek R1, QwQ, Qwen3, Phi-4
-- **Vision models**: GPT-4o, Claude 3.5/4, Gemini, local VLMs
+- **Vision models**: GPT-4o, GPT-4.1, GPT-5 series, o-series (o1, o3, o4-mini), Claude 3.5/4, Gemini (all models), Pixtral, local VLMs
 - **FIM models**: Codestral, Qwen2.5-coder, StarCoder2
 
 **Cursor**: ✅ **Yes** - Wide model support.
@@ -361,6 +361,8 @@ This comparison is based on:
 - Vision-capable model detection (verified in `modelRouter.ts:1400-1417`)
 - Image QA registry (verified in `imageQARegistryContribution.ts`)
 - Multimodal message handling (verified in `convertToLLMMessageService.ts`)
+- Supports image uploads for: GPT-4o, GPT-4.1, GPT-5 series, o-series, Claude 3.5/4, Gemini (all), Pixtral, local VLMs
+- PDF upload support with text extraction and vision-based processing
 
 **Cursor**: ✅ **Yes** - Vision model support.
 
@@ -500,9 +502,10 @@ For a detailed list of models supported by CortexIDE, see the [Supported Models 
 
 CortexIDE supports 15+ providers with 100+ models, including:
 - Reasoning models (o1, o3, Claude 3.7/4, DeepSeek R1, QwQ, Qwen3, Phi-4)
-- Vision models (GPT-4o, Claude 3.5/4, Gemini, local VLMs)
+- Vision models (GPT-4o, GPT-4.1, GPT-5 series, o-series, Claude 3.5/4, Gemini, Pixtral, local VLMs)
 - FIM models (Codestral, Qwen2.5-coder, StarCoder2)
 - Local models (Ollama, vLLM, LM Studio)
+
 
 ## Conclusion
 
@@ -525,4 +528,6 @@ While other tools excel in specific areas (Cursor's polish, Continue.dev's VS Co
 - Unknown: Marked when information cannot be verified
 
 If you find any inaccuracies, please [open an issue](https://github.com/cortexide/cortexide/issues/new) with corrections and sources.
+
+
 

@@ -174,11 +174,18 @@ async function testImageScreenshot(router: ITaskAwareModelRouter): Promise<Smoke
 
 	try {
 		const decision = await router.route(context);
-		const isVisionModel = decision.modelSelection.providerName.toLowerCase() === 'gemini' ||
-		                     decision.modelSelection.modelName.toLowerCase().includes('4o') ||
-		                     decision.modelSelection.modelName.toLowerCase().includes('4.1') ||
-		                     decision.modelSelection.modelName.toLowerCase().includes('claude') ||
-		                     decision.modelSelection.modelName.toLowerCase().includes('llava');
+		const modelName = decision.modelSelection.modelName.toLowerCase();
+		const provider = decision.modelSelection.providerName.toLowerCase();
+		const isVisionModel = provider === 'gemini' ||
+		                     modelName.includes('gpt-5') ||
+		                     modelName.includes('4.1') ||
+		                     modelName.includes('4o') ||
+		                     modelName.startsWith('o1') ||
+		                     modelName.startsWith('o3') ||
+		                     modelName.startsWith('o4') ||
+		                     modelName.includes('claude') ||
+		                     modelName.includes('pixtral') ||
+		                     modelName.includes('llava');
 
 		return {
 			name: 'Image screenshot',
