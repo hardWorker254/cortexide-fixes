@@ -3,7 +3,7 @@
  *  Licensed under the Apache License, Version 2.0. See LICENSE.txt for more information.
  *--------------------------------------------------------------------------------------*/
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAccessor, useIsDark, useSettingsState } from '../util/services.js';
 import { Brain, Check, ChevronRight, DollarSign, ExternalLink, Lock, X } from 'lucide-react';
 import { displayInfoOfProviderName, ProviderName, providerNames, localProviderNames, featureNames, FeatureName, isFeatureNameDisabled } from '../../../../common/cortexideSettingsTypes.js';
@@ -15,7 +15,7 @@ import { FileAccess } from '../../../../../../../base/common/network.js';
 
 const OVERRIDE_VALUE = false
 
-const HERO_LOGO_URI = FileAccess.asBrowserUri('vs/workbench/browser/media/cortexide-main.png').toString(true)
+const getHeroLogoUri = () => FileAccess.asBrowserUri('vs/workbench/browser/media/cortexide-main.png').toString(true)
 
 const welcomeHighlights = [
 	'Chat + Quick Edit',
@@ -63,16 +63,27 @@ export const VoidOnboarding = () => {
 	)
 }
 
-const VoidIcon = () => (
-	<div className="w-full max-w-[220px] aspect-square rounded-full border border-white/10 bg-black shadow-[0_45px_120px_rgba(0,0,0,0.95)] overflow-hidden">
-		<img
-			src={HERO_LOGO_URI}
-			alt="CortexIDE logo"
-			className="w-full h-full object-contain opacity-95"
-			draggable={false}
-		/>
-	</div>
-)
+const VoidIcon = () => {
+	const heroLogoUri = useMemo(() => getHeroLogoUri(), []);
+	return (
+		<div className="w-full max-w-[220px] aspect-square rounded-full border border-white/10 bg-black shadow-[0_45px_120px_rgba(0,0,0,0.95)] overflow-hidden">
+			<img
+				src={heroLogoUri}
+				alt="CortexIDE logo"
+				className="w-full h-full object-contain opacity-95"
+				draggable={false}
+				onError={(e) => {
+					console.error('Failed to load CortexIDE logo:', heroLogoUri);
+					// Fallback: try direct path
+					const fallbackUri = FileAccess.asBrowserUri('vs/workbench/browser/media/cortexide-main.png').toString(true);
+					if (fallbackUri !== heroLogoUri) {
+						(e.target as HTMLImageElement).src = fallbackUri;
+					}
+				}}
+			/>
+		</div>
+	)
+}
 
 const FADE_DURATION_MS = 2000
 
@@ -418,7 +429,7 @@ const WelcomePage = ({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
 						<div>
 							<h1 className="text-5xl font-light text-void-fg-0">Build with the editor AI actually ships in</h1>
 							<p className="text-base text-void-fg-2 mt-3 max-w-xl mx-auto lg:mx-0">
-								CortexIDE keeps Chat, Quick Edit, Fast Apply, and source control in the same dark workspace—and it adds native PDF + image uploads so product specs and design mocks travel with every conversation.
+								CortexIDE keeps Chat, Quick Edit, Fast Apply, and source control in the same dark workspace-and it adds native PDF + image uploads so product specs and design mocks travel with every conversation.
 							</p>
 						</div>
 						<div className="flex flex-wrap gap-3 justify-center lg:justify-start">
