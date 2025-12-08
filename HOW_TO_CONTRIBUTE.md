@@ -1,11 +1,11 @@
 # Contributing to CortexIDE
 ### Welcome! 👋
-This is the official guide on how to contribute to CortexIDE. We want to make it as easy as possible to contribute, so if you have any questions or comments, reach out via email or discord!
+This is the official guide on how to contribute to CortexIDE. We want to make it as easy as possible to contribute, so if you have any questions or comments, reach out via email or [Discord](https://discord.gg/NFc3EKPany)!
 
 There are a few ways to contribute:
 
 - 💫 Complete items on the Roadmap.
-- 💡 Make suggestions in our Discord.
+- 💡 Make suggestions in our [Discord](https://discord.gg/NFc3EKPany).
 - 🪴 Start new Issues in this repository.
 
 

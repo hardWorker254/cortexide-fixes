@@ -19,7 +19,7 @@ This repo contains the full sourcecode for CortexIDE. If you're new, welcome!
 
 - 🧭 [Website](https://opencortexide.com)
 
-- 👋 [Discord](https://discord.gg/pb4z4vtb)
+- 👋 [Discord](https://discord.gg/NFc3EKPany)
 
 - 🚙 [Project Board](https://github.com/orgs/opencortexide/projects/1)
 
@@ -28,7 +28,7 @@ This repo contains the full sourcecode for CortexIDE. If you're new, welcome!
 
 1. To get started working on CortexIDE, check out our Project Board! You can also see [HOW_TO_CONTRIBUTE](https://github.com/opencortexide/cortexide/blob/main/HOW_TO_CONTRIBUTE.md).
 
-2. Feel free to attend a casual weekly meeting in our Discord channel!
+2. Feel free to attend a casual weekly meeting in our [Discord channel](https://discord.gg/NFc3EKPany)!
 
 
 ## Reference
@@ -39,4 +39,4 @@ For a guide to the codebase, see [CORTEXIDE_CODEBASE_GUIDE.md](./CORTEXIDE_CODEB
 
 
 ## Support
-You can always reach us in our Discord server.
+You can always reach us in our [Discord server](https://discord.gg/NFc3EKPany).
