@@ -60,17 +60,20 @@
 .menubar-menu-items-holder {
 	position: fixed;
 	opacity: 1;
-	z-index: 3500;
+	z-index: 10000;
 	display: block;
 	visibility: visible;
 	pointer-events: auto;
+	/* Ensure menu is above all workbench content and overlays */
+	transform: none;
+	will-change: auto;
 }
 
 .menubar .menubar-menu-items-holder {
 	position: fixed;
 	left: 0px;
 	opacity: 1;
-	z-index: 3500;
+	z-index: 10000;
 }
 
 .menubar.compact .menubar-menu-items-holder {
@@ -81,6 +84,11 @@
 .menubar-menu-items-holder.monaco-menu-container {
 	outline: 0;
 	border: none;
+	/* Ensure container and its children are visible */
+	opacity: 1 !important;
+	visibility: visible !important;
+	display: block !important;
+	pointer-events: auto !important;
 }
 
 .menubar-menu-items-holder.monaco-menu-container :focus {
@@ -94,6 +102,20 @@
 
 .menubar .menubar-menu-items-holder.monaco-menu-container :focus {
 	outline: 0;
+}
+
+/* Windows-specific: Ensure menu is visible when appended to document.body */
+/* Note: On Windows, menu is appended to body, so we target body > selector */
+body > .menubar-menu-items-holder.monaco-menu-container {
+	position: fixed !important;
+	z-index: 10000 !important;
+	opacity: 1 !important;
+	visibility: visible !important;
+	display: block !important;
+	pointer-events: auto !important;
+	transform: none !important;
+	/* Prevent any stacking context issues */
+	isolation: auto;
 }
 
 .menubar .toolbar-toggle-more {
