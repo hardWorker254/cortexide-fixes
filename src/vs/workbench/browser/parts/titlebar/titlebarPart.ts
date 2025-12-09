@@ -414,6 +414,11 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 		this.menubar = append(this.leftContent, $('div.menubar'));
 		this.menubar.setAttribute('role', 'menubar');
 
+		// On Windows, add a class to indicate menubar is present for CSS targeting
+		if (isWindows) {
+			this.rootContainer.classList.add('has-menubar');
+		}
+
 		this._register(this.customMenubar.value.onVisibilityChange(e => this.onMenubarVisibilityChanged(e)));
 
 		this.customMenubar.value.create(this.menubar);
@@ -424,6 +429,11 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 
 		this.menubar?.remove();
 		this.menubar = undefined;
+
+		// Remove menubar class on Windows
+		if (isWindows) {
+			this.rootContainer.classList.remove('has-menubar');
+		}
 
 		this.onMenubarVisibilityChanged(false);
 	}

@@ -28,6 +28,12 @@
 	width: 100%;
 }
 
+/* On Windows, make container draggable so empty areas can be dragged */
+/* This compensates for pointer-events: none on the drag region */
+.monaco-workbench.windows .part.titlebar > .titlebar-container {
+	-webkit-app-region: drag;
+}
+
 /* Account for zooming */
 .monaco-workbench .part.titlebar > .titlebar-container.counter-zoom {
 	zoom: calc(1.0 / var(--zoom-factor));
@@ -68,6 +74,23 @@
 	width: 100%;
 	height: 100%;
 	-webkit-app-region: drag;
+}
+
+/* On Windows, ensure interactive elements can receive pointer events */
+/* The drag region covers everything, but interactive elements with -webkit-app-region: no-drag */
+/* should receive clicks. Setting pointer-events: none on drag region allows events to pass through */
+/* to elements above it (with higher z-index). Window dragging still works because empty areas */
+/* of the titlebar container itself can be dragged. */
+.monaco-workbench.windows .part.titlebar > .titlebar-container > .titlebar-drag-region {
+	pointer-events: none;
+}
+
+/* Ensure interactive elements can receive pointer events on Windows */
+/* They have -webkit-app-region: no-drag which prevents dragging but allows clicks */
+.monaco-workbench.windows .part.titlebar > .titlebar-container > .titlebar-left,
+.monaco-workbench.windows .part.titlebar > .titlebar-container > .titlebar-center,
+.monaco-workbench.windows .part.titlebar > .titlebar-container > .titlebar-right {
+	pointer-events: auto;
 }
 
 .monaco-workbench .part.titlebar > .titlebar-container > .titlebar-left,

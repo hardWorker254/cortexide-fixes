@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { isAncestorOfActiveElement } from '../../../../../base/browser/dom.js';
-import { mainWindow } from '../../../../../base/browser/window.js';
-import { toAction, WorkbenchActionExecutedClassification, WorkbenchActionExecutedEvent } from '../../../../../base/common/actions.js';
+import { WorkbenchActionExecutedClassification, WorkbenchActionExecutedEvent } from '../../../../../base/common/actions.js';
 import { coalesce } from '../../../../../base/common/arrays.js';
 import { timeout } from '../../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -14,7 +13,7 @@ import { fromNowByDay, safeIntl } from '../../../../../base/common/date.js';
 import { Event } from '../../../../../base/common/event.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
-import { Disposable, DisposableStore, markAsSingleton } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { MarshalledId } from '../../../../../base/common/marshallingIds.js';
 import { language } from '../../../../../base/common/platform.js';
 import { basename, isEqual } from '../../../../../base/common/resources.js';
@@ -27,9 +26,8 @@ import { IRange } from '../../../../../editor/common/core/range.js';
 import { EditorContextKeys } from '../../../../../editor/common/editorContextKeys.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
-import { DropdownWithPrimaryActionViewItem } from '../../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import { getContextMenuActions } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
-import { Action2, ICommandPaletteOptions, IMenuService, MenuId, MenuItemAction, MenuRegistry, registerAction2, SubmenuItemAction } from '../../../../../platform/actions/common/actions.js';
+import { Action2, ICommandPaletteOptions, IMenuService, MenuId, MenuRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
@@ -1619,38 +1617,40 @@ const defaultChat = {
 };
 
 // Add next to the command center if command center is disabled
-MenuRegistry.appendMenuItem(MenuId.CommandCenter, {
-	submenu: MenuId.ChatTitleBarMenu,
-	title: localize('title4', "Chat"),
-	icon: Codicon.chatSparkle,
-	when: ContextKeyExpr.and(
-		ChatContextKeys.supported,
-		ContextKeyExpr.and(
-			ChatContextKeys.Setup.hidden.negate(),
-			ChatContextKeys.Setup.disabled.negate()
-		),
-		ContextKeyExpr.has('config.chat.commandCenter.enabled')
-	),
-	order: 10001 // to the right of command center
-});
+// DISABLED FOR CORTEXIDE: We do not want the VS Code chat button in the titlebar/command center
+// MenuRegistry.appendMenuItem(MenuId.CommandCenter, {
+// 	submenu: MenuId.ChatTitleBarMenu,
+// 	title: localize('title4', "Chat"),
+// 	icon: Codicon.chatSparkle,
+// 	when: ContextKeyExpr.and(
+// 		ChatContextKeys.supported,
+// 		ContextKeyExpr.and(
+// 			ChatContextKeys.Setup.hidden.negate(),
+// 			ChatContextKeys.Setup.disabled.negate()
+// 		),
+// 		ContextKeyExpr.has('config.chat.commandCenter.enabled')
+// 	),
+// 	order: 10001 // to the right of command center
+// });
 
 // Add to the global title bar if command center is disabled
-MenuRegistry.appendMenuItem(MenuId.TitleBar, {
-	submenu: MenuId.ChatTitleBarMenu,
-	title: localize('title4', "Chat"),
-	group: 'navigation',
-	icon: Codicon.chatSparkle,
-	when: ContextKeyExpr.and(
-		ChatContextKeys.supported,
-		ContextKeyExpr.and(
-			ChatContextKeys.Setup.hidden.negate(),
-			ChatContextKeys.Setup.disabled.negate()
-		),
-		ContextKeyExpr.has('config.chat.commandCenter.enabled'),
-		ContextKeyExpr.has('config.window.commandCenter').negate(),
-	),
-	order: 1
-});
+// DISABLED FOR CORTEXIDE: We do not want the VS Code chat button in the titlebar
+// MenuRegistry.appendMenuItem(MenuId.TitleBar, {
+// 	submenu: MenuId.ChatTitleBarMenu,
+// 	title: localize('title4', "Chat"),
+// 	group: 'navigation',
+// 	icon: Codicon.chatSparkle,
+// 	when: ContextKeyExpr.and(
+// 		ChatContextKeys.supported,
+// 		ContextKeyExpr.and(
+// 			ChatContextKeys.Setup.hidden.negate(),
+// 			ChatContextKeys.Setup.disabled.negate()
+// 		),
+// 		ContextKeyExpr.has('config.chat.commandCenter.enabled'),
+// 		ContextKeyExpr.has('config.window.commandCenter').negate(),
+// 	),
+// 	order: 1
+// });
 
 registerAction2(class ToggleCopilotControl extends ToggleTitleBarConfigAction {
 	constructor() {
@@ -1680,52 +1680,53 @@ export class CopilotTitleBarMenuRendering extends Disposable implements IWorkben
 	) {
 		super();
 
-		const disposable = actionViewItemService.register(MenuId.CommandCenter, MenuId.ChatTitleBarMenu, (action, options, instantiationService, windowId) => {
-			if (!(action instanceof SubmenuItemAction)) {
-				return undefined;
-			}
+		// DISABLED FOR CORTEXIDE: We do not want the VS Code chat button in the titlebar/command center
+		// const disposable = actionViewItemService.register(MenuId.CommandCenter, MenuId.ChatTitleBarMenu, (action, options, instantiationService, windowId) => {
+		// 	if (!(action instanceof SubmenuItemAction)) {
+		// 		return undefined;
+		// 	}
 
-			const dropdownAction = toAction({
-				id: 'copilot.titleBarMenuRendering.more',
-				label: localize('more', "More..."),
-				run() { }
-			});
+		// 	const dropdownAction = toAction({
+		// 		id: 'copilot.titleBarMenuRendering.more',
+		// 		label: localize('more', "More..."),
+		// 		run() { }
+		// 	});
 
-			const chatSentiment = chatEntitlementService.sentiment;
-			const chatQuotaExceeded = chatEntitlementService.quotas.chat?.percentRemaining === 0;
-			const signedOut = chatEntitlementService.entitlement === ChatEntitlement.Unknown;
-			const anonymous = chatEntitlementService.anonymous;
-			const free = chatEntitlementService.entitlement === ChatEntitlement.Free;
+		// 	const chatSentiment = chatEntitlementService.sentiment;
+		// 	const chatQuotaExceeded = chatEntitlementService.quotas.chat?.percentRemaining === 0;
+		// 	const signedOut = chatEntitlementService.entitlement === ChatEntitlement.Unknown;
+		// 	const anonymous = chatEntitlementService.anonymous;
+		// 	const free = chatEntitlementService.entitlement === ChatEntitlement.Free;
 
-			const isAuxiliaryWindow = windowId !== mainWindow.vscodeWindowId;
-			let primaryActionId = isAuxiliaryWindow ? CHAT_OPEN_ACTION_ID : TOGGLE_CHAT_ACTION_ID;
-			let primaryActionTitle = isAuxiliaryWindow ? localize('openChat', "Open Chat") : localize('toggleChat', "Toggle Chat");
-			let primaryActionIcon = Codicon.chatSparkle;
-			if (chatSentiment.installed && !chatSentiment.disabled) {
-				if (signedOut && !anonymous) {
-					primaryActionId = CHAT_SETUP_ACTION_ID;
-					primaryActionTitle = localize('signInToChatSetup', "Sign in to use AI features...");
-					primaryActionIcon = Codicon.chatSparkleError;
-				} else if (chatQuotaExceeded && free) {
-					primaryActionId = OPEN_CHAT_QUOTA_EXCEEDED_DIALOG;
-					primaryActionTitle = localize('chatQuotaExceededButton', "GitHub Copilot Free plan chat messages quota reached. Click for details.");
-					primaryActionIcon = Codicon.chatSparkleWarning;
-				}
-			}
-			return instantiationService.createInstance(DropdownWithPrimaryActionViewItem, instantiationService.createInstance(MenuItemAction, {
-				id: primaryActionId,
-				title: primaryActionTitle,
-				icon: primaryActionIcon,
-			}, undefined, undefined, undefined, undefined), dropdownAction, action.actions, '', { ...options, skipTelemetry: true });
-		}, Event.any(
-			chatEntitlementService.onDidChangeSentiment,
-			chatEntitlementService.onDidChangeQuotaExceeded,
-			chatEntitlementService.onDidChangeEntitlement,
-			chatEntitlementService.onDidChangeAnonymous
-		));
+		// 	const isAuxiliaryWindow = windowId !== mainWindow.vscodeWindowId;
+		// 	let primaryActionId = isAuxiliaryWindow ? CHAT_OPEN_ACTION_ID : TOGGLE_CHAT_ACTION_ID;
+		// 	let primaryActionTitle = isAuxiliaryWindow ? localize('openChat', "Open Chat") : localize('toggleChat', "Toggle Chat");
+		// 	let primaryActionIcon = Codicon.chatSparkle;
+		// 	if (chatSentiment.installed && !chatSentiment.disabled) {
+		// 		if (signedOut && !anonymous) {
+		// 			primaryActionId = CHAT_SETUP_ACTION_ID;
+		// 			primaryActionTitle = localize('signInToChatSetup', "Sign in to use AI features...");
+		// 			primaryActionIcon = Codicon.chatSparkleError;
+		// 		} else if (chatQuotaExceeded && free) {
+		// 			primaryActionId = OPEN_CHAT_QUOTA_EXCEEDED_DIALOG;
+		// 			primaryActionTitle = localize('chatQuotaExceededButton', "GitHub Copilot Free plan chat messages quota reached. Click for details.");
+		// 			primaryActionIcon = Codicon.chatSparkleWarning;
+		// 		}
+		// 	}
+		// 	return instantiationService.createInstance(DropdownWithPrimaryActionViewItem, instantiationService.createInstance(MenuItemAction, {
+		// 		id: primaryActionId,
+		// 		title: primaryActionTitle,
+		// 		icon: primaryActionIcon,
+		// 	}, undefined, undefined, undefined, undefined), dropdownAction, action.actions, '', { ...options, skipTelemetry: true });
+		// }, Event.any(
+		// 	chatEntitlementService.onDidChangeSentiment,
+		// 	chatEntitlementService.onDidChangeQuotaExceeded,
+		// 	chatEntitlementService.onDidChangeEntitlement,
+		// 	chatEntitlementService.onDidChangeAnonymous
+		// ));
 
-		// Reduces flicker a bit on reload/restart
-		markAsSingleton(disposable);
+		// // Reduces flicker a bit on reload/restart
+		// markAsSingleton(disposable);
 	}
 }
 
