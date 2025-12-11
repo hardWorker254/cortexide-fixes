@@ -87,6 +87,7 @@ export class MenuBar extends Disposable {
 
 	private numMenusShown: number = 0;
 	private overflowLayoutScheduled: IDisposable | undefined = undefined;
+	private isCleaningUp: boolean = false;
 
 	private readonly menuDisposables = this._register(new DisposableStore());
 
@@ -998,35 +999,44 @@ export class MenuBar extends Disposable {
 	}
 
 	private cleanupCustomMenu(): void {
-		if (this.focusedMenu) {
-			// Remove focus from the menus first
-			if (this.focusedMenu.index === MenuBar.OVERFLOW_INDEX) {
-				this.overflowMenu.buttonElement.focus();
-			} else {
-				this.menus[this.focusedMenu.index].buttonElement?.focus();
-			}
-
-			if (this.focusedMenu.holder) {
-				// Remove 'open' class from button element (not from document.body on Windows)
-				const actualMenuIndex = this.focusedMenu.index >= this.numMenusShown ? MenuBar.OVERFLOW_INDEX : this.focusedMenu.index;
-				const customMenu = actualMenuIndex === MenuBar.OVERFLOW_INDEX ? this.overflowMenu : this.menus[actualMenuIndex];
-				customMenu.buttonElement?.classList.remove('open');
-
-				this.focusedMenu.holder.remove();
-			}
-
-			this.focusedMenu.widget?.dispose();
-
-			this.focusedMenu = { index: this.focusedMenu.index };
+		// Prevent re-entrancy - if we're already cleaning up, don't do it again
+		if (this.isCleaningUp) {
+			return;
 		}
-		this.menuDisposables.clear();
+
+		this.isCleaningUp = true;
+		try {
+			const focusedMenu = this.focusedMenu;
+			if (focusedMenu) {
+				// Defensive check: ensure holder exists before accessing it
+				// This prevents errors when cleanupCustomMenu is called in edge cases
+				if (focusedMenu.holder) {
+					// Remove 'open' class from button element (not from document.body on Windows)
+					const actualMenuIndex = focusedMenu.index >= this.numMenusShown ? MenuBar.OVERFLOW_INDEX : focusedMenu.index;
+					const customMenu = actualMenuIndex === MenuBar.OVERFLOW_INDEX ? this.overflowMenu : this.menus[actualMenuIndex];
+					customMenu.buttonElement?.classList.remove('open');
+
+					focusedMenu.holder.remove();
+				}
+
+				focusedMenu.widget?.dispose();
+
+				// Only update focusedMenu if it hasn't been cleared by another operation
+				if (this.focusedMenu === focusedMenu) {
+					this.focusedMenu = { index: focusedMenu.index };
+				}
+			}
+			this.menuDisposables.clear();
+		} finally {
+			this.isCleaningUp = false;
+		}
 	}
 
 	private showCustomMenu(menuIndex: number, selectFirst = true): void {
 		const actualMenuIndex = menuIndex >= this.numMenusShown ? MenuBar.OVERFLOW_INDEX : menuIndex;
 		const customMenu = actualMenuIndex === MenuBar.OVERFLOW_INDEX ? this.overflowMenu : this.menus[actualMenuIndex];
 
-		if (!customMenu.actions || !customMenu.buttonElement || !customMenu.titleElement) {
+		if (!customMenu.actions || customMenu.actions.length === 0 || !customMenu.buttonElement || !customMenu.titleElement) {
 			return;
 		}
 
@@ -1034,27 +1044,43 @@ export class MenuBar extends Disposable {
 
 		customMenu.buttonElement.classList.add('open');
 
+		// Ensure the title element is visible and laid out before getting bounding rect
+		// This is critical on Windows where elements might not be laid out immediately
 		const titleBoundingRect = customMenu.titleElement.getBoundingClientRect();
 		const titleBoundingRectZoom = DOM.getDomNodeZoomLevel(customMenu.titleElement);
 
+		// Validate bounding rect - if invalid, use button element as fallback
+		let validBoundingRect = titleBoundingRect;
+		if (titleBoundingRect.width === 0 && titleBoundingRect.height === 0) {
+			validBoundingRect = customMenu.buttonElement.getBoundingClientRect();
+		}
+
 		if (this.options.compactMode?.horizontal === HorizontalDirection.Right) {
-			menuHolder.style.left = `${titleBoundingRect.left + this.container.clientWidth}px`;
+			menuHolder.style.left = `${validBoundingRect.left + this.container.clientWidth}px`;
 		} else if (this.options.compactMode?.horizontal === HorizontalDirection.Left) {
 			const windowWidth = DOM.getWindow(this.container).innerWidth;
-			menuHolder.style.right = `${windowWidth - titleBoundingRect.left}px`;
+			menuHolder.style.right = `${windowWidth - validBoundingRect.left}px`;
 			menuHolder.style.left = 'auto';
 		} else {
-			menuHolder.style.left = `${titleBoundingRect.left * titleBoundingRectZoom}px`;
+			menuHolder.style.left = `${validBoundingRect.left * titleBoundingRectZoom}px`;
 		}
 
 		if (this.options.compactMode?.vertical === VerticalDirection.Above) {
 			// TODO@benibenj Do not hardcode the height of the menu holder
-			menuHolder.style.top = `${titleBoundingRect.top - this.menus.length * 30 + this.container.clientHeight}px`;
+			menuHolder.style.top = `${validBoundingRect.top - this.menus.length * 30 + this.container.clientHeight}px`;
 		} else if (this.options.compactMode?.vertical === VerticalDirection.Below) {
-			menuHolder.style.top = `${titleBoundingRect.top}px`;
+			menuHolder.style.top = `${validBoundingRect.top}px`;
 		} else {
-			menuHolder.style.top = `${titleBoundingRect.bottom * titleBoundingRectZoom}px`;
+			menuHolder.style.top = `${validBoundingRect.bottom * titleBoundingRectZoom}px`;
 		}
+
+		// Ensure menu holder is visible with explicit styles
+		menuHolder.style.position = 'fixed';
+		menuHolder.style.zIndex = '10000';
+		menuHolder.style.visibility = 'visible';
+		menuHolder.style.display = 'block';
+		menuHolder.style.opacity = '1';
+		menuHolder.style.pointerEvents = 'auto';
 
 		// On Windows, append dropdown to document.body to avoid stacking context issues
 		// where the dropdown renders behind the workbench content

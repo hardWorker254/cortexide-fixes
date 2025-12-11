@@ -118,6 +118,28 @@ body > .menubar-menu-items-holder.monaco-menu-container {
 	isolation: auto;
 	/* Ensure menu appears above all workbench content including titlebar with backdrop-filter */
 	will-change: auto;
+	/* Ensure menu container doesn't interfere with theme - Menu widget handles theming */
+	background: transparent !important;
+}
+
+/* Ensure proper height calculation for menu content on Windows */
+/* Note: Menu widget applies colors via IMenuStyles, so we only fix sizing here */
+body > .menubar-menu-items-holder.monaco-menu-container .monaco-scrollable-element {
+	/* Ensure proper height calculation - let content determine height */
+	height: auto !important;
+	min-height: fit-content !important;
+}
+
+body > .menubar-menu-items-holder.monaco-menu-container .monaco-menu {
+	/* Ensure proper height calculation */
+	height: auto !important;
+	min-height: fit-content !important;
+}
+
+body > .menubar-menu-items-holder.monaco-menu-container .actions-container {
+	/* Ensure proper height calculation */
+	height: auto !important;
+	min-height: fit-content !important;
 }
 
 .menubar .toolbar-toggle-more {
