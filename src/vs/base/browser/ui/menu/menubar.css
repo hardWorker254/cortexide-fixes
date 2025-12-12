@@ -122,27 +122,41 @@ body > .menubar-menu-items-holder.monaco-menu-container {
 	background: transparent !important;
 }
 
-/* Ensure proper height calculation and theming for menu content on Windows */
-/* Menu widget applies colors via IMenuStyles inline styles, but we add CSS variable fallbacks */
+/* Menubar dropdown styling - matching Quick Input aesthetic */
+/* Use Cortex theme variables for modern, cohesive styling */
+body > .menubar-menu-items-holder.monaco-menu-container {
+	/* Modern rounded corners and backdrop blur like Quick Input */
+	border-radius: 16px !important;
+	backdrop-filter: blur(22px) !important;
+	/* Subtle shadow and inner glow */
+	box-shadow: var(--cortex-shadow-soft, 0 30px 80px rgba(0, 0, 0, 0.5)), inset 0 0 0 1px rgba(255, 255, 255, 0.02) !important;
+	/* Ensure menu container doesn't interfere with theme */
+	background: transparent !important;
+}
+
+/* Menu scrollable element - main container styling */
 body > .menubar-menu-items-holder.monaco-menu-container .monaco-scrollable-element {
 	/* Ensure proper height calculation - let content determine height */
 	height: auto !important;
 	min-height: fit-content !important;
-	/* Theme colors - use CSS variables as fallback if inline styles aren't applied */
-	background-color: var(--vscode-menu-background, #060606) !important;
-	color: var(--vscode-menu-foreground, #E0E0E0) !important;
-	border-color: var(--vscode-menu-border, #1C1C1C) !important;
+	/* Modern background with color-mix like Quick Input */
+	background: color-mix(in srgb, var(--cortex-surface-2, #080808) 92%, #020208 8%) !important;
+	color: var(--cortex-text-base, var(--vscode-menu-foreground, #E0E0E0)) !important;
+	border: 1px solid var(--cortex-border-strong, var(--vscode-menu-border, #1C1C1C)) !important;
+	border-radius: 16px !important;
 	/* Font family to match codebase */
 	font-family: "Segoe WPC", "Segoe UI", sans-serif !important;
+	/* Remove default outline, use border instead */
+	outline: none !important;
 }
 
 body > .menubar-menu-items-holder.monaco-menu-container .monaco-menu {
 	/* Ensure proper height calculation */
 	height: auto !important;
 	min-height: fit-content !important;
-	/* Theme colors */
-	background-color: var(--vscode-menu-background, #060606) !important;
-	color: var(--vscode-menu-foreground, #E0E0E0) !important;
+	/* Transparent background to show parent styling */
+	background: transparent !important;
+	color: var(--cortex-text-base, var(--vscode-menu-foreground, #E0E0E0)) !important;
 	/* Font family */
 	font-family: "Segoe WPC", "Segoe UI", sans-serif !important;
 }
@@ -151,8 +165,10 @@ body > .menubar-menu-items-holder.monaco-menu-container .actions-container {
 	/* Ensure proper height calculation */
 	height: auto !important;
 	min-height: fit-content !important;
+	/* Transparent background */
+	background: transparent !important;
 	/* Theme colors */
-	color: var(--vscode-menu-foreground, #E0E0E0) !important;
+	color: var(--cortex-text-base, var(--vscode-menu-foreground, #E0E0E0)) !important;
 	/* Font family */
 	font-family: "Segoe WPC", "Segoe UI", sans-serif !important;
 }
@@ -160,44 +176,56 @@ body > .menubar-menu-items-holder.monaco-menu-container .actions-container {
 body > .menubar-menu-items-holder.monaco-menu-container .monaco-action-bar {
 	/* Font family */
 	font-family: "Segoe WPC", "Segoe UI", sans-serif !important;
+	/* Transparent background */
+	background: transparent !important;
 }
 
-/* Menu items - ensure proper text color and font */
+/* Menu items - modern styling matching Quick Input */
 body > .menubar-menu-items-holder.monaco-menu-container .action-menu-item {
-	color: var(--vscode-menu-foreground, #E0E0E0) !important;
+	color: var(--cortex-text-muted, var(--vscode-menu-foreground, #E0E0E0)) !important;
 	font-family: "Segoe WPC", "Segoe UI", sans-serif !important;
+	background: transparent !important;
+	border-radius: 12px !important;
+	border: 1px solid transparent !important;
+	padding: 6px 12px !important;
+	transition: all var(--cortex-transition-fast, 140ms ease) !important;
 }
 
 body > .menubar-menu-items-holder.monaco-menu-container .action-label {
-	color: var(--vscode-menu-foreground, #E0E0E0) !important;
+	color: inherit !important;
 	font-family: "Segoe WPC", "Segoe UI", sans-serif !important;
+	font-size: var(--cortex-font-body, 12px) !important;
+	line-height: 20px !important;
 }
 
 body > .menubar-menu-items-holder.monaco-menu-container .keybinding {
-	color: var(--vscode-menu-foreground, #E0E0E0) !important;
+	color: inherit !important;
 	font-family: "Segoe WPC", "Segoe UI", sans-serif !important;
+	font-size: var(--cortex-font-body, 12px) !important;
 	opacity: 0.7;
 }
 
-/* Menu item hover and focus states */
+/* Menu item hover and focus states - modern highlight like Quick Input */
 body > .menubar-menu-items-holder.monaco-menu-container .action-menu-item:hover,
 body > .menubar-menu-items-holder.monaco-menu-container .action-menu-item:focus {
-	background-color: var(--vscode-menu-selectionBackground, #161016) !important;
-	color: var(--vscode-menu-selectionForeground, #FFFFFF) !important;
+	background: color-mix(in srgb, var(--cortex-surface-1-alt, #060606) 65%, #090c18 35%) !important;
+	border-color: var(--cortex-border-strong, var(--vscode-menu-selectionBackground, #161016)) !important;
+	color: var(--cortex-text-strong, var(--vscode-menu-selectionForeground, #FFFFFF)) !important;
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03) !important;
 }
 
 body > .menubar-menu-items-holder.monaco-menu-container .action-menu-item:hover .action-label,
 body > .menubar-menu-items-holder.monaco-menu-container .action-menu-item:focus .action-label,
 body > .menubar-menu-items-holder.monaco-menu-container .action-menu-item:hover .keybinding,
 body > .menubar-menu-items-holder.monaco-menu-container .action-menu-item:focus .keybinding {
-	color: var(--vscode-menu-selectionForeground, #FFFFFF) !important;
+	color: var(--cortex-text-strong, var(--vscode-menu-selectionForeground, #FFFFFF)) !important;
 }
 
 /* Icons and indicators */
 body > .menubar-menu-items-holder.monaco-menu-container .codicon,
 body > .menubar-menu-items-holder.monaco-menu-container .submenu-indicator,
 body > .menubar-menu-items-holder.monaco-menu-container .menu-item-check {
-	color: var(--vscode-menu-foreground, #E0E0E0) !important;
+	color: var(--cortex-text-muted, var(--vscode-menu-foreground, #E0E0E0)) !important;
 }
 
 body > .menubar-menu-items-holder.monaco-menu-container .action-menu-item:hover .codicon,
@@ -206,15 +234,20 @@ body > .menubar-menu-items-holder.monaco-menu-container .action-menu-item:hover 
 body > .menubar-menu-items-holder.monaco-menu-container .action-menu-item:focus .submenu-indicator,
 body > .menubar-menu-items-holder.monaco-menu-container .action-menu-item:hover .menu-item-check,
 body > .menubar-menu-items-holder.monaco-menu-container .action-menu-item:focus .menu-item-check {
-	color: var(--vscode-menu-selectionForeground, #FFFFFF) !important;
+	color: var(--cortex-text-strong, var(--vscode-menu-selectionForeground, #FFFFFF)) !important;
 }
 
 /* Disabled menu items */
 body > .menubar-menu-items-holder.monaco-menu-container .action-item.disabled .action-label,
 body > .menubar-menu-items-holder.monaco-menu-container .action-item.disabled .keybinding,
 body > .menubar-menu-items-holder.monaco-menu-container .action-item.disabled .codicon {
-	color: var(--vscode-disabledForeground, #6E6E6E) !important;
+	color: var(--cortex-text-subtle, var(--vscode-disabledForeground, #6E6E6E)) !important;
 	opacity: 0.4;
+}
+
+/* Separator styling */
+body > .menubar-menu-items-holder.monaco-menu-container .action-label.separator {
+	border-bottom-color: color-mix(in srgb, var(--cortex-border-weak, #161616) 80%, transparent) !important;
 }
 
 .menubar .toolbar-toggle-more {
