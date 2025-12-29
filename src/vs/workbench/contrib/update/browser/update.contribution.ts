@@ -15,7 +15,9 @@ import product from '../../../../platform/product/common/product.js';
 import { IUpdateService, StateType, State } from '../../../../platform/update/common/update.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { isWindows, isWeb } from '../../../../base/common/platform.js';
-import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IFileDialogService, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { mnemonicButtonLabel } from '../../../../base/common/labels.js';
 import { ShowCurrentReleaseNotesActionId, ShowCurrentReleaseNotesFromCurrentFileActionId } from '../common/update.js';
 import { IsWebContext } from '../../../../platform/contextkey/common/contextkeys.js';
@@ -199,10 +201,56 @@ class DownloadAction extends Action2 {
 }
 
 registerAction2(DownloadAction);
+class SwitchUpdateChannelAction extends Action2 {
+	constructor() {
+		super({
+			id: 'update.switchChannel',
+			title: localize2('switchUpdateChannel', 'Switch Update Channel...'),
+			category: { value: product.nameShort, original: product.nameShort },
+			f1: true,
+		});
+	}
+
+	async run(accessor: ServicesAccessor): Promise<void> {
+		const configurationService = accessor.get(IConfigurationService);
+		const dialogService = accessor.get(IDialogService);
+		const notificationService = accessor.get(INotificationService);
+
+		const currentChannel = configurationService.getValue<'stable' | 'beta' | 'nightly'>('update.updateChannel') || 'stable';
+
+		const { result } = await dialogService.prompt<'stable' | 'beta' | 'nightly'>({
+			type: 'info',
+			message: localize('switchUpdateChannel.message', 'Select Update Channel'),
+			detail: localize('switchUpdateChannel.detail', 'Choose which update channel to use. This will take effect after restart.'),
+			buttons: [
+				{
+					label: localize('updateChannel.stable', 'Stable'),
+					run: () => 'stable' as const
+				},
+				{
+					label: localize('updateChannel.beta', 'Beta'),
+					run: () => 'beta' as const
+				},
+				{
+					label: localize('updateChannel.nightly', 'Nightly'),
+					run: () => 'nightly' as const
+				}
+			],
+			cancelButton: true
+		});
+
+		if (result && result !== currentChannel) {
+			await configurationService.updateValue('update.updateChannel', result);
+			notificationService.info(localize('switchUpdateChannel.success', 'Update channel changed to {0}. Please restart for changes to take effect.', result));
+		}
+	}
+}
+
 registerAction2(CheckForUpdateAction);
 registerAction2(DownloadUpdateAction);
 registerAction2(InstallUpdateAction);
 registerAction2(RestartToUpdateAction);
+registerAction2(SwitchUpdateChannelAction);
 
 if (isWindows) {
 	class DeveloperApplyUpdateAction extends Action2 {

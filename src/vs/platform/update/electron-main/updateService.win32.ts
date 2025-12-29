@@ -99,7 +99,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 		await super.initialize();
 	}
 
-	protected buildUpdateFeedUrl(quality: string): string | undefined {
+	protected buildUpdateFeedUrl(quality: string, channel?: string): string | undefined {
 		let platform = `win32-${process.arch}`;
 
 		if (getUpdateType() === UpdateType.Archive) {
@@ -108,7 +108,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 			platform += '-user';
 		}
 
-		return createUpdateURL(platform, quality, this.productService);
+		return createUpdateURL(platform, quality, this.productService, channel);
 	}
 
 	protected doCheckForUpdates(explicit: boolean): void {
@@ -127,6 +127,11 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 				if (!update || !update.url || !update.version || !update.productVersion) {
 					this.setState(State.Idle(updateType));
 					return Promise.resolve(null);
+				}
+
+				// Log release notes availability if present
+				if (update.releaseNotes) {
+					this.logService.info(`update#checkForUpdates - release notes available at: ${update.releaseNotes}`);
 				}
 
 				if (updateType === UpdateType.Archive) {

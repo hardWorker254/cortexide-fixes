@@ -28,8 +28,8 @@ export class LinuxUpdateService extends AbstractUpdateService {
 		super(lifecycleMainService, configurationService, environmentMainService, requestService, logService, productService);
 	}
 
-	protected buildUpdateFeedUrl(quality: string): string {
-		return createUpdateURL(`linux-${process.arch}`, quality, this.productService);
+	protected buildUpdateFeedUrl(quality: string, channel?: string): string {
+		return createUpdateURL(`linux-${process.arch}`, quality, this.productService, channel);
 	}
 
 	protected doCheckForUpdates(explicit: boolean): void {
@@ -58,6 +58,11 @@ export class LinuxUpdateService extends AbstractUpdateService {
 	}
 
 	protected override async doDownloadUpdate(state: AvailableForDownload): Promise<void> {
+		// Linux does not support automatic updates for most packaging formats (deb/rpm/AppImage).
+		// Only Snap packages support auto-updates via the system package manager.
+		// For other formats, we open the download page so users can manually download and install.
+		// This is intentional and truthful - we do not fake automatic updates.
+
 		// Use the download URL if available as we don't currently detect the package type that was
 		// installed and the website download page is more useful than the tarball generally.
 		if (this.productService.downloadUrl && this.productService.downloadUrl.length > 0) {

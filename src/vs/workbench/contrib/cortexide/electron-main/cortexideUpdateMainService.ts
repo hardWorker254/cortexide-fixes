@@ -3,9 +3,12 @@
  *  Licensed under the Apache License, Version 2.0. See LICENSE.txt for more information.
  *--------------------------------------------------------------------------------------*/
 
+import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IEnvironmentMainService } from '../../../../platform/environment/electron-main/environmentMainService.js';
 import { IProductService } from '../../../../platform/product/common/productService.js';
+import { asJson, IRequestService } from '../../../../platform/request/common/request.js';
 import { IUpdateService, StateType } from '../../../../platform/update/common/update.js';
 import { ICortexideUpdateService } from '../common/cortexideUpdateService.js';
 import { CortexideCheckUpdateResponse } from '../common/cortexideUpdateServiceTypes.js';
@@ -19,6 +22,8 @@ export class CortexideMainUpdateService extends Disposable implements ICortexide
 		@IProductService private readonly _productService: IProductService,
 		@IEnvironmentMainService private readonly _envMainService: IEnvironmentMainService,
 		@IUpdateService private readonly _updateService: IUpdateService,
+		@IConfigurationService private readonly _configurationService: IConfigurationService,
+		@IRequestService private readonly _requestService: IRequestService,
 	) {
 		super()
 	}
@@ -39,8 +44,6 @@ export class CortexideMainUpdateService extends Disposable implements ICortexide
 		}
 
 		this._updateService.checkForUpdates(false) // implicity check, then handle result ourselves
-
-		console.log('updateState', this._updateService.state)
 
 		if (this._updateService.state.type === StateType.Uninitialized) {
 			// The update service hasn't been initialized yet
@@ -83,7 +86,8 @@ export class CortexideMainUpdateService extends Disposable implements ICortexide
 		}
 
 		if (this._updateService.state.type === StateType.Disabled) {
-			return await this._manualCheckGHTagIfDisabled(explicit)
+			const channel = this._configurationService.getValue<'stable' | 'beta' | 'nightly'>('update.updateChannel') || 'stable';
+			return await this._manualCheckGHTagIfDisabled(explicit, channel)
 		}
 		return null
 	}
@@ -93,11 +97,31 @@ export class CortexideMainUpdateService extends Disposable implements ICortexide
 
 
 
-	private async _manualCheckGHTagIfDisabled(explicit: boolean): Promise<CortexideCheckUpdateResponse> {
+	private async _manualCheckGHTagIfDisabled(explicit: boolean, channel: 'stable' | 'beta' | 'nightly'): Promise<CortexideCheckUpdateResponse> {
 		try {
-			const response = await fetch('https://api.github.com/repos/cortexide/cortexide/releases/latest');
+			let releaseUrl: string;
+			if (channel === 'beta') {
+				releaseUrl = 'https://api.github.com/repos/OpenCortexIDE/cortexide/releases?per_page=1';
+			} else if (channel === 'nightly') {
+				releaseUrl = 'https://api.github.com/repos/OpenCortexIDE/cortexide/releases?per_page=1';
+			} else {
+				releaseUrl = 'https://api.github.com/repos/OpenCortexIDE/cortexide/releases/latest';
+			}
 
-			const data = await response.json();
+			const context = await this._requestService.request({ url: releaseUrl, type: 'GET' }, CancellationToken.None);
+			if (context.res.statusCode !== 200) {
+				throw new Error(`GitHub API returned ${context.res.statusCode}`);
+			}
+
+			const jsonData = await asJson(context);
+			const data = channel === 'stable'
+				? jsonData
+				: Array.isArray(jsonData) ? jsonData[0] : jsonData;
+
+			if (!data || !data.tag_name) {
+				throw new Error('Invalid release data');
+			}
+
 			const version = data.tag_name;
 
 			const myVersion = this._productService.version
@@ -110,23 +134,17 @@ export class CortexideMainUpdateService extends Disposable implements ICortexide
 
 			// explicit
 			if (explicit) {
-				if (response.ok) {
-					if (!isUpToDate) {
-						message = 'A new version of CortexIDE is available! Please reinstall (auto-updates are disabled on this OS) - it only takes a second!'
-						action = 'reinstall'
-					}
-					else {
-						message = 'CortexIDE is up-to-date!'
-					}
+				if (!isUpToDate) {
+					message = 'A new version of CortexIDE is available! Please reinstall (auto-updates are disabled on this OS) - it only takes a second!'
+					action = 'reinstall'
 				}
 				else {
-					message = `An error occurred when fetching the latest GitHub release tag. Please try again in ~5 minutes, or reinstall.`
-					action = 'reinstall'
+					message = 'CortexIDE is up-to-date!'
 				}
 			}
 			// not explicit
 			else {
-				if (response.ok && !isUpToDate) {
+				if (!isUpToDate) {
 					message = 'A new version of CortexIDE is available! Please reinstall (auto-updates are disabled on this OS) - it only takes a second!'
 					action = 'reinstall'
 				}

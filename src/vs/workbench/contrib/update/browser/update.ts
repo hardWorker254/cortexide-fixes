@@ -306,6 +306,8 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 			return;
 		}
 
+		// Linux: Auto-updates are not available for most packaging formats (deb/rpm/AppImage).
+		// Only Snap packages support auto-updates. For other formats, users must manually download.
 		this.notificationService.prompt(
 			severity.Info,
 			nls.localize('thereIsUpdateAvailable', "There is an available update."),
@@ -318,7 +320,12 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 			}, {
 				label: nls.localize('releaseNotes', "Release Notes"),
 				run: () => {
-					this.instantiationService.invokeFunction(accessor => showReleaseNotes(accessor, productVersion));
+					// Prefer release notes from update feed if available
+					if (update.releaseNotes) {
+						this.openerService.open(URI.parse(update.releaseNotes));
+					} else {
+						this.instantiationService.invokeFunction(accessor => showReleaseNotes(accessor, productVersion));
+					}
 				}
 			}],
 			{ priority: NotificationPriority.OPTIONAL }
@@ -355,7 +362,16 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 			}, {
 				label: nls.localize('releaseNotes', "Release Notes"),
 				run: () => {
-					this.instantiationService.invokeFunction(accessor => showReleaseNotes(accessor, productVersion));
+					// Prefer release notes from update feed if available
+					if (update.releaseNotes) {
+						this.openerService.open(URI.parse(update.releaseNotes));
+					} else if (update.releaseNotesText) {
+						// If release notes text is provided, show it in editor
+						this.instantiationService.invokeFunction(accessor => showReleaseNotes(accessor, productVersion));
+					} else {
+						// Fallback to static release notes URL
+						this.instantiationService.invokeFunction(accessor => showReleaseNotes(accessor, productVersion));
+					}
 				}
 			}],
 			{ priority: NotificationPriority.OPTIONAL }
@@ -381,15 +397,26 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 			actions.push({
 				label: nls.localize('releaseNotes', "Release Notes"),
 				run: () => {
-					this.instantiationService.invokeFunction(accessor => showReleaseNotes(accessor, productVersion));
+					// Prefer release notes from update feed if available
+					if (update.releaseNotes) {
+						this.openerService.open(URI.parse(update.releaseNotes));
+					} else if (update.releaseNotesText) {
+						// If release notes text is provided, show it in editor
+						this.instantiationService.invokeFunction(accessor => showReleaseNotes(accessor, productVersion));
+					} else {
+						// Fallback to static release notes URL
+						this.instantiationService.invokeFunction(accessor => showReleaseNotes(accessor, productVersion));
+					}
 				}
 			});
 		}
 
 		// windows user fast updates and mac
+		// Note: App binary rollback is not supported. Only composer file edits can be rolled back.
+		const message = nls.localize('updateAvailableAfterRestart', "Restart {0} to apply the latest update.", this.productService.nameLong);
 		this.notificationService.prompt(
 			severity.Info,
-			nls.localize('updateAvailableAfterRestart', "Restart {0} to apply the latest update.", this.productService.nameLong),
+			message,
 			actions,
 			{
 				sticky: true,
@@ -485,9 +512,15 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 					return;
 				}
 
-				const productVersion = this.updateService.state.update.productVersion;
+				const update = this.updateService.state.update;
+				const productVersion = update.productVersion;
 				if (productVersion) {
-					this.instantiationService.invokeFunction(accessor => showReleaseNotes(accessor, productVersion));
+					// Prefer release notes from update feed if available
+					if (update.releaseNotes) {
+						this.openerService.open(URI.parse(update.releaseNotes));
+					} else {
+						this.instantiationService.invokeFunction(accessor => showReleaseNotes(accessor, productVersion));
+					}
 				}
 
 			});
