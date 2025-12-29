@@ -90,7 +90,7 @@ const notifyUpdate = (res: CortexideCheckUpdateResponse & { message: string }, n
 			class: undefined,
 			run: () => {
 				const { window } = dom.getActiveWindow()
-				window.open('https://cortexide.com/')
+				window.open('https://opencortexide.com')
 			}
 		})
 
