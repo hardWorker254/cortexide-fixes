@@ -50,40 +50,45 @@ export const ErrorDisplay = ({
 	const message = normalizedMessage + ''
 
 	return (
-		<div className={`rounded-lg border border-red-200 bg-red-50 p-4 overflow-auto`}>
+		<div className={`rounded-lg border border-red-200 bg-red-50 p-4 overflow-auto error-display-enter shadow-sm`}>
 			{/* Header */}
-			<div className='flex items-start justify-between'>
-				<div className='flex gap-3'>
-					<AlertCircle className='h-5 w-5 text-red-600 mt-0.5' />
-					<div className='flex-1'>
-						<h3 className='font-semibold text-red-800'>
+			<div className='flex items-start justify-between gap-3'>
+				<div className='flex gap-3 flex-1 min-w-0'>
+					<AlertCircle className='h-5 w-5 text-red-600 mt-0.5 flex-shrink-0' />
+					<div className='flex-1 min-w-0'>
+						<h3 className='font-semibold text-red-800 text-sm'>
 							{/* eg Error */}
 							Error
 						</h3>
-						<p className='text-red-700 mt-1'>
+						<p className='text-red-700 mt-1 text-sm break-words'>
 							{/* eg Something went wrong */}
 							{message}
 						</p>
 					</div>
 				</div>
 
-				<div className='flex gap-2'>
+				<div className='flex gap-1 flex-shrink-0'>
 					{isExpandable && (
-						<button className='text-red-600 hover:text-red-800 p-1 rounded'
+						<button
+							className='text-red-600 hover:text-red-800 hover:bg-red-100 p-1.5 rounded transition-colors duration-200'
 							onClick={() => setIsExpanded(!isExpanded)}
+							aria-label={isExpanded ? 'Hide details' : 'Show details'}
+							aria-expanded={isExpanded}
 						>
 							{isExpanded ? (
-								<ChevronUp className='h-5 w-5' />
+								<ChevronUp className='h-4 w-4' />
 							) : (
-								<ChevronDown className='h-5 w-5' />
+								<ChevronDown className='h-4 w-4' />
 							)}
 						</button>
 					)}
 					{showDismiss && onDismiss && (
-						<button className='text-red-600 hover:text-red-800 p-1 rounded'
+						<button
+							className='text-red-600 hover:text-red-800 hover:bg-red-100 p-1.5 rounded transition-colors duration-200'
 							onClick={onDismiss}
+							aria-label='Dismiss error'
 						>
-							<X className='h-5 w-5' />
+							<X className='h-4 w-4' />
 						</button>
 					)}
 				</div>
@@ -94,7 +99,7 @@ export const ErrorDisplay = ({
 				<div className='mt-3 flex gap-2 flex-wrap'>
 					{onRetry && (
 						<button
-							className='flex items-center gap-1 px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors'
+							className='flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 active:bg-red-800 transition-all duration-200 shadow-sm hover:shadow'
 							onClick={onRetry}
 							aria-label='Retry operation'
 						>
@@ -104,7 +109,7 @@ export const ErrorDisplay = ({
 					)}
 					{onRollback && (
 						<button
-							className='flex items-center gap-1 px-3 py-1.5 text-sm bg-red-500 text-white rounded hover:bg-red-600 transition-colors'
+							className='flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-500 text-white rounded hover:bg-red-600 active:bg-red-700 transition-all duration-200 shadow-sm hover:shadow'
 							onClick={onRollback}
 							aria-label='Rollback changes'
 						>
@@ -114,7 +119,7 @@ export const ErrorDisplay = ({
 					)}
 					{onOpenLogs && (
 						<button
-							className='flex items-center gap-1 px-3 py-1.5 text-sm border border-red-300 text-red-700 rounded hover:bg-red-50 transition-colors'
+							className='flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-300 text-red-700 rounded hover:bg-red-50 active:bg-red-100 transition-all duration-200'
 							onClick={onOpenLogs}
 							aria-label='Open logs'
 						>
@@ -127,10 +132,10 @@ export const ErrorDisplay = ({
 
 			{/* Expandable Details (dev mode only, no raw stacks) */}
 			{isExpanded && details && (
-				<div className='mt-4 space-y-3 border-t border-red-200 pt-3 overflow-auto'>
+				<div className='mt-4 space-y-3 border-t border-red-200 pt-3 overflow-auto animate-in fade-in slide-in-from-top-2 duration-200'>
 					<div>
-						<span className='font-semibold text-red-800'>Technical Details: </span>
-						<pre className='text-red-700 text-xs'>{details}</pre>
+						<span className='font-semibold text-red-800 text-xs'>Technical Details: </span>
+						<pre className='text-red-700 text-xs mt-1.5 p-2 bg-red-100/50 rounded border border-red-200/50 overflow-x-auto'>{details}</pre>
 					</div>
 				</div>
 			)}

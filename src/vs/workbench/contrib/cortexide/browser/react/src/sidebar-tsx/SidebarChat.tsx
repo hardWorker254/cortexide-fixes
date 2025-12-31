@@ -127,31 +127,82 @@ export const IconWarning = ({ size, className = '' }: { size: number, className?
 };
 
 
-export const IconLoading = ({ className = '', showTokenCount }: { className?: string, showTokenCount?: number }) => {
-	const [dots, setDots] = useState(1);
+type LoadingState = 'thinking' | 'typing' | 'processing' | 'default';
+
+// Format token count with k/m suffixes for better readability
+const formatTokenCount = (count: number): string => {
+	if (count >= 1000000) {
+		return `${(count / 1000000).toFixed(1)}M`;
+	} else if (count >= 1000) {
+		return `${(count / 1000).toFixed(1)}k`;
+	}
+	return count.toString();
+}
+
+export const IconLoading = ({
+	className = '',
+	showTokenCount,
+	state = 'default',
+	inline = false
+}: {
+	className?: string,
+	showTokenCount?: number,
+	state?: LoadingState,
+	inline?: boolean
+}) => {
+	// Use CSS animations instead of JavaScript for better performance
+	const [prevTokenCount, setPrevTokenCount] = useState<number | undefined>(undefined);
+	const [shouldPulse, setShouldPulse] = useState(false);
 
 	useEffect(() => {
-		// Optimized: Use requestAnimationFrame for smoother animation, update every 400ms
-		let frameId: number;
-		let lastUpdate = Date.now();
+		if (showTokenCount !== undefined && showTokenCount !== prevTokenCount) {
+			setShouldPulse(true);
+			setPrevTokenCount(showTokenCount);
+			const timer = setTimeout(() => setShouldPulse(false), 300);
+			return () => clearTimeout(timer);
+		}
+	}, [showTokenCount, prevTokenCount]);
 
-		const animate = () => {
-			const now = Date.now();
-			if (now - lastUpdate >= 400) {
-				setDots(prev => prev >= 3 ? 1 : prev + 1);
-				lastUpdate = now;
-			}
-			frameId = requestAnimationFrame(animate);
-		};
+	const tokenText = showTokenCount !== undefined
+		? ` (${formatTokenCount(showTokenCount)} tokens)`
+		: '';
 
-		frameId = requestAnimationFrame(animate);
-		return () => cancelAnimationFrame(frameId);
-	}, []);
+	// Different animation speeds for different states
+	const animationSpeed = state === 'thinking' ? '1.6s' : state === 'processing' ? '1.2s' : '1.4s';
 
-	const dotsText = '.'.repeat(dots);
-	const tokenText = showTokenCount !== undefined ? ` (${showTokenCount} tokens)` : '';
+	const dots = (
+		<span
+			className={`inline-flex items-center gap-0.5 ${inline ? 'ml-1' : ''}`}
+			style={{ animationDuration: animationSpeed }}
+			aria-label={state === 'thinking' ? 'Thinking' : state === 'typing' ? 'Typing' : state === 'processing' ? 'Processing' : 'Loading'}
+			role="status"
+		>
+			<span className="loading-dot" />
+			<span className="loading-dot" />
+			<span className="loading-dot" />
+		</span>
+	);
 
-	return <div className={`${className}`}>{dotsText}{tokenText}</div>;
+	return (
+		<div className={`inline-flex items-center gap-1 ${className}`}>
+			{dots}
+			{tokenText && (
+				<span className={`text-xs opacity-70 ${shouldPulse ? 'token-count-update' : ''}`}>
+					{tokenText}
+				</span>
+			)}
+		</div>
+	);
+}
+
+// Typing cursor component for inline use at end of streaming content
+export const TypingCursor = ({ className = '' }: { className?: string }) => {
+	return (
+		<span
+			className={`typing-cursor ${className}`}
+			aria-hidden="true"
+		/>
+	);
 }
 
 
@@ -635,9 +686,12 @@ export const ButtonSubmit = ({ className, disabled, ...props }: ButtonProps & Re
 	return <button
 		type='button'
 		className={`rounded-full flex-shrink-0 flex-grow-0 flex items-center justify-center
-			${disabled ? 'bg-vscode-disabled-fg cursor-default' : 'bg-white cursor-pointer'}
+			button-press-animation
+			${disabled ? 'bg-vscode-disabled-fg cursor-default opacity-50' : 'bg-white cursor-pointer hover:bg-gray-50'}
 			${className}
 		`}
+		disabled={disabled}
+		aria-label="Send message"
 		// data-tooltip-id='void-tooltip'
 		// data-tooltip-content={'Send'}
 		// data-tooltip-place='left'
@@ -650,13 +704,14 @@ export const ButtonSubmit = ({ className, disabled, ...props }: ButtonProps & Re
 export const ButtonStop = ({ className, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) => {
 	return <button
 		className={`rounded-full flex-shrink-0 flex-grow-0 cursor-pointer flex items-center justify-center
-			bg-white
+			bg-white hover:bg-red-50 button-press-animation
 			${className}
 		`}
 		type='button'
+		aria-label="Stop generation"
 		{...props}
 	>
-		<IconSquare size={DEFAULT_BUTTON_SIZE} className="stroke-[3] p-[7px]" />
+		<IconSquare size={DEFAULT_BUTTON_SIZE} className="stroke-[3] p-[7px] text-red-600" />
 	</button>
 }
 
@@ -1607,7 +1662,12 @@ const AssistantMessageComponent = React.memo(({ chatMessage, isCheckpointGhost, 
 
 		{/* assistant message */}
 		{chatMessage.displayContent &&
-			<div className={`${isCheckpointGhost ? 'opacity-50' : ''}`}>
+			<div
+				className={`${isCheckpointGhost ? 'opacity-50' : ''} ${!isCommitted ? 'streaming-content-chunk' : ''}`}
+				role={!isCommitted ? "status" : undefined}
+				aria-live={!isCommitted ? "polite" : undefined}
+				aria-atomic={!isCommitted ? "false" : undefined}
+			>
 				<ProseWrapper>
 					<ChatMarkdownRender
 						string={chatMessage.displayContent || ''}
@@ -1615,6 +1675,7 @@ const AssistantMessageComponent = React.memo(({ chatMessage, isCheckpointGhost, 
 						isApplyEnabled={true}
 						isLinkDetectionEnabled={true}
 					/>
+					{!isCommitted && <TypingCursor className="text-void-fg-2" aria-label="Streaming content" />}
 				</ProseWrapper>
 			</div>
 		}
@@ -1636,7 +1697,7 @@ const ReasoningWrapper = ({ isDoneReasoning, isStreaming, children }: { isDoneRe
 	useEffect(() => {
 		if (!isWriting) setIsOpen(false) // if just finished reasoning, close
 	}, [isWriting])
-	return <ToolHeaderWrapper title='Reasoning' desc1={isWriting ? <IconLoading /> : ''} isOpen={isOpen} onClick={() => setIsOpen(v => !v)}>
+	return <ToolHeaderWrapper title='Reasoning' desc1={isWriting ? <IconLoading state="thinking" inline /> : ''} isOpen={isOpen} onClick={() => setIsOpen(v => !v)}>
 		<ToolChildrenWrapper>
 			<div className='!select-text cursor-auto'>
 				{children}
@@ -1651,9 +1712,9 @@ const ReasoningWrapper = ({ isDoneReasoning, isStreaming, children }: { isDoneRe
 // should either be past or "-ing" tense, not present tense. Eg. when the LLM searches for something, the user expects it to say "I searched for X" or "I am searching for X". Not "I search X".
 
 const loadingTitleWrapper = (item: React.ReactNode): React.ReactNode => {
-	return <span className='flex items-center flex-nowrap'>
+	return <span className='flex items-center flex-nowrap gap-1'>
 		{item}
-		<IconLoading className='w-3 text-sm' />
+		<IconLoading state="processing" inline className='w-3 text-sm' />
 	</span>
 }
 
@@ -2750,7 +2811,7 @@ const builtinToolNameToComponent: { [T in BuiltinToolName]: { resultWrapper: Res
 				const componentParams: ToolHeaderParams = { title, desc1, desc1Info, isError: false, icon, isRejected: false }
 				componentParams.children = <ToolChildrenWrapper>
 					<div className='flex items-center gap-2 text-sm text-void-fg-3'>
-						<IconLoading />
+						<IconLoading state="processing" inline />
 						<span>Searching the web...</span>
 					</div>
 				</ToolChildrenWrapper>
@@ -2825,7 +2886,7 @@ const builtinToolNameToComponent: { [T in BuiltinToolName]: { resultWrapper: Res
 				const componentParams: ToolHeaderParams = { title, desc1, desc1Info, isError: false, icon, isRejected: false }
 				componentParams.children = <ToolChildrenWrapper>
 					<div className='flex items-center gap-2 text-sm text-void-fg-3'>
-						<IconLoading />
+						<IconLoading state="processing" inline />
 						<span>Fetching content from URL...</span>
 					</div>
 				</ToolChildrenWrapper>
@@ -3490,7 +3551,9 @@ const ReviewComponent = ({ message, isCheckpointGhost }: { message: ReviewMessag
 
 const ChatBubble = React.memo((props: ChatBubbleProps) => {
 	return <ErrorBoundary>
-		<_ChatBubble {...props} />
+		<div className="message-enter">
+			<_ChatBubble {...props} />
+		</div>
 	</ErrorBoundary>
 }, (prev, next) => {
 	// Custom comparison: only re-render if props actually changed
@@ -3873,11 +3936,11 @@ const EditToolSoFar = ({ toolCallSoFar, }: { toolCallSoFar: RawToolCallObj }) =>
 	const title = titleOfBuiltinToolName[toolCallSoFar.name].proposed
 
 	const uriDone = toolCallSoFar.doneParams.includes('uri')
-	const desc1 = <span className='flex items-center'>
+	const desc1 = <span className='flex items-center gap-1'>
 		{uriDone ?
 			getBasename(toolCallSoFar.rawParams['uri'] ?? 'unknown')
 			: `Generating`}
-		<IconLoading />
+		<IconLoading state="processing" inline />
 	</span>
 
 	const desc1OnClick = () => { uri && voidOpenFileFn(uri, accessor) }
@@ -3893,7 +3956,7 @@ const EditToolSoFar = ({ toolCallSoFar, }: { toolCallSoFar: RawToolCallObj }) =>
 			code={toolCallSoFar.rawParams.search_replace_blocks ?? toolCallSoFar.rawParams.new_content ?? ''}
 			type={'rewrite'} // as it streams, show in rewrite format, don't make a diff editor
 		/>
-		<IconLoading />
+		<IconLoading state="processing" inline />
 	</ToolHeaderWrapper>
 
 }
@@ -4447,24 +4510,39 @@ export const SidebarChat = () => {
 		{/* Generating tool */}
 		{generatingTool}
 
-		{/* loading indicator with token count */}
-		{(isRunning === 'LLM' || isRunning === 'preparing') ? <ProseWrapper>
-			<IconLoading
-				className='opacity-50 text-sm'
-				showTokenCount={
-					// Only show token count when actively streaming (LLM)
-					// When isRunning is 'idle' or undefined, the message is complete and token count should stop
-					displayContentSoFar && isRunning === 'LLM'
-						? Math.ceil(displayContentSoFar.length / 4)
-						: undefined
-				}
-			/>
-		</ProseWrapper> : null}
+		{/* loading indicator with status message - only show when no content is streaming yet */}
+		{(isRunning === 'LLM' || isRunning === 'preparing') && !displayContentSoFar && !reasoningSoFar ? (
+			<ProseWrapper>
+				<div
+					className="flex items-center gap-2 text-sm opacity-70 loading-state-transition"
+					role="status"
+					aria-live="polite"
+					aria-atomic="true"
+				>
+					{isRunning === 'preparing' && currThreadStreamState?.llmInfo?.displayContentSoFar ? (
+						<>
+							<span className="text-void-fg-2" aria-hidden="false">{currThreadStreamState.llmInfo.displayContentSoFar}</span>
+							<IconLoading state="thinking" inline />
+						</>
+					) : isRunning === 'preparing' ? (
+						<>
+							<span className="text-void-fg-2" aria-hidden="false">Preparing request</span>
+							<IconLoading state="thinking" inline />
+						</>
+					) : (
+						<>
+							<span className="text-void-fg-2" aria-hidden="false">Generating response</span>
+							<IconLoading state="typing" inline />
+						</>
+					)}
+				</div>
+			</ProseWrapper>
+		) : null}
 
 
 		{/* error message */}
 		{latestError === undefined ? null :
-			<div className='px-2 my-1'>
+			<div className='px-2 my-1 message-enter'>
 				<ErrorDisplay
 					message={latestError.message}
 					fullError={latestError.fullError}

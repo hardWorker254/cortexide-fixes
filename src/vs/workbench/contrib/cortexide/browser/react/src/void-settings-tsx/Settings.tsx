@@ -1408,7 +1408,7 @@ export const OneClickSwitchButton = ({ fromEditor = 'VS Code', className = '' }:
 	return <>
 		<VoidButtonBgDarken className={`max-w-48 p-4 ${className}`} disabled={transferState.type !== 'done'} onClick={onClick}>
 			{transferState.type === 'done' ? `Transfer from ${fromEditor}`
-				: transferState.type === 'loading' ? <span className='text-nowrap flex flex-nowrap'>Transferring<IconLoading /></span>
+				: transferState.type === 'loading' ? <span className='text-nowrap flex flex-nowrap items-center gap-1'>Transferring<IconLoading state="processing" inline /></span>
 					: transferState.type === 'justfinished' ? <AnimatedCheckmarkButton text='Settings Transferred' className='bg-none' />
 						: null
 			}
