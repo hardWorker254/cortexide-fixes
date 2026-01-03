@@ -14,8 +14,10 @@ import { IProductService } from '../../product/common/productService.js';
 import { IRequestService } from '../../request/common/request.js';
 import { AvailableForDownload, DisablementReason, IUpdateService, State, StateType, UpdateType } from '../common/update.js';
 
-export function createUpdateURL(platform: string, quality: string, productService: IProductService): string {
-	return `${productService.updateUrl}/api/update/${platform}/${quality}/${productService.commit}`;
+export function createUpdateURL(platform: string, quality: string, productService: IProductService, channel?: string): string {
+	// Use channel if provided, otherwise fall back to quality for backward compatibility
+	const channelOrQuality = channel || quality;
+	return `${productService.updateUrl}/api/update/${platform}/${channelOrQuality}/${productService.commit}`;
 }
 
 export type UpdateErrorClassification = {
@@ -89,7 +91,11 @@ export abstract class AbstractUpdateService implements IUpdateService {
 			return;
 		}
 
-		this.url = this.buildUpdateFeedUrl(quality);
+		// Get update channel from settings, default to 'stable' if not set
+		const updateChannel = this.configurationService.getValue<'stable' | 'beta' | 'nightly'>('update.updateChannel') || 'stable';
+		this.logService.info(`update#ctor - using update channel: ${updateChannel}`);
+
+		this.url = this.buildUpdateFeedUrl(quality, updateChannel);
 		if (!this.url) {
 			this.setState(State.Disabled(DisablementReason.InvalidConfiguration));
 			this.logService.info('update#ctor - updates are disabled as the update URL is badly formed');
@@ -230,6 +236,6 @@ export abstract class AbstractUpdateService implements IUpdateService {
 		// noop
 	}
 
-	protected abstract buildUpdateFeedUrl(quality: string): string | undefined;
+	protected abstract buildUpdateFeedUrl(quality: string, channel?: string): string | undefined;
 	protected abstract doCheckForUpdates(explicit: boolean): void;
 }

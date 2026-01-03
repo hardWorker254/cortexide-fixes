@@ -21,7 +21,7 @@ import { IAction } from '../../../../base/common/actions.js';
 
 
 const notifyUpdate = (res: CortexideCheckUpdateResponse & { message: string }, notifService: INotificationService, updateService: IUpdateService): INotificationHandle => {
-    const message = res?.message || 'This is a very old version. Please download the latest CortexIDE!'
+	const message = res?.message || 'This is a very old version. Please download the latest CortexIDE!'
 
 	let actions: INotificationActions | undefined
 
@@ -37,7 +37,7 @@ const notifyUpdate = (res: CortexideCheckUpdateResponse & { message: string }, n
 				class: undefined,
 				run: () => {
 					const { window } = dom.getActiveWindow()
-					window.open('https://voideditor.com/download-beta')
+					window.open('https://opencortexide.com')
 				}
 			})
 		}
@@ -82,17 +82,17 @@ const notifyUpdate = (res: CortexideCheckUpdateResponse & { message: string }, n
 			})
 		}
 
-        primary.push({
-            id: 'void.updater.site',
-            enabled: true,
-            label: `CortexIDE Site`,
-            tooltip: '',
-            class: undefined,
-            run: () => {
-                const { window } = dom.getActiveWindow()
-                window.open('https://cortexide.com/')
-            }
-        })
+		primary.push({
+			id: 'void.updater.site',
+			enabled: true,
+			label: `CortexIDE Site`,
+			tooltip: '',
+			class: undefined,
+			run: () => {
+				const { window } = dom.getActiveWindow()
+				window.open('https://opencortexide.com')
+			}
+		})
 
 		actions = {
 			primary: primary,
@@ -127,7 +127,7 @@ const notifyUpdate = (res: CortexideCheckUpdateResponse & { message: string }, n
 	// })
 }
 const notifyErrChecking = (notifService: INotificationService): INotificationHandle => {
-    const message = `There was an error checking for updates. If this persists, please reinstall CortexIDE.`
+	const message = `There was an error checking for updates. If this persists, please reinstall CortexIDE.`
 	const notifController = notifService.notify({
 		severity: Severity.Info,
 		message: message,
@@ -177,7 +177,7 @@ registerAction2(class extends Action2 {
 		super({
 			f1: true,
 			id: 'void.voidCheckUpdate',
-            title: localize2('voidCheckUpdate', 'CortexIDE: Check for Updates'),
+			title: localize2('voidCheckUpdate', 'CortexIDE: Check for Updates'),
 		});
 	}
 	async run(accessor: ServicesAccessor): Promise<void> {

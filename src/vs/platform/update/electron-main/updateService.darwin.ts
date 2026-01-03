@@ -73,8 +73,8 @@ export class DarwinUpdateService extends AbstractUpdateService implements IRelau
 		this.setState(State.Idle(UpdateType.Archive, message));
 	}
 
-	protected buildUpdateFeedUrl(quality: string): string | undefined {
-		const url = createUpdateURL(process.platform, quality, this.productService);
+	protected buildUpdateFeedUrl(quality: string, channel?: string): string | undefined {
+		const url = createUpdateURL(process.platform, quality, this.productService, channel);
 		try {
 			electron.autoUpdater.setFeedURL({ url });
 		} catch (e) {

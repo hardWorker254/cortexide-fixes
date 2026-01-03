@@ -14,6 +14,8 @@ export interface IUpdate {
 	timestamp?: number;
 	url?: string;
 	sha256hash?: string;
+	releaseNotes?: string; // URL to release notes
+	releaseNotesText?: string; // Release notes content (markdown or HTML)
 }
 
 /**
