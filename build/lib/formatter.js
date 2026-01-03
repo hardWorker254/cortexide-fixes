@@ -8,8 +8,8 @@ exports.format = format;
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-const fs = require("fs");
-const path = require("path");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const typescript_1 = __importDefault(require("typescript"));
 class LanguageServiceHost {
     files = {};
@@ -57,7 +57,7 @@ const defaults = {
 const getOverrides = (() => {
     let value;
     return () => {
-        value ??= JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'tsfmt.json'), 'utf8'));
+        value ??= JSON.parse(fs_1.default.readFileSync(path_1.default.join(__dirname, '..', '..', 'tsfmt.json'), 'utf8'));
         return value;
     };
 })();

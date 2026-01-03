@@ -9,8 +9,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.toStringShakeLevel = toStringShakeLevel;
 exports.shake = shake;
-const fs = require("fs");
-const path = require("path");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const typeScriptLanguageServiceHost_1 = require("./typeScriptLanguageServiceHost");
 var ShakeLevel;
 (function (ShakeLevel) {
@@ -32,7 +32,7 @@ function printDiagnostics(options, diagnostics) {
     for (const diag of diagnostics) {
         let result = '';
         if (diag.file) {
-            result += `${path.join(options.sourcesRoot, diag.file.fileName)}`;
+            result += `${path_1.default.join(options.sourcesRoot, diag.file.fileName)}`;
         }
         if (diag.file && diag.start) {
             const location = diag.file.getLineAndCharacterOfPosition(diag.start);
@@ -70,19 +70,19 @@ function createTypeScriptLanguageService(ts, options) {
     const FILES = new Map();
     // Add entrypoints
     options.entryPoints.forEach(entryPoint => {
-        const filePath = path.join(options.sourcesRoot, entryPoint);
-        FILES.set(path.normalize(filePath), fs.readFileSync(filePath).toString());
+        const filePath = path_1.default.join(options.sourcesRoot, entryPoint);
+        FILES.set(path_1.default.normalize(filePath), fs_1.default.readFileSync(filePath).toString());
     });
     // Add fake usage files
     options.inlineEntryPoints.forEach((inlineEntryPoint, index) => {
-        FILES.set(path.normalize(path.join(options.sourcesRoot, `inlineEntryPoint.${index}.ts`)), inlineEntryPoint);
+        FILES.set(path_1.default.normalize(path_1.default.join(options.sourcesRoot, `inlineEntryPoint.${index}.ts`)), inlineEntryPoint);
     });
     // Add additional typings
     options.typings.forEach((typing) => {
-        const filePath = path.join(options.sourcesRoot, typing);
-        FILES.set(path.normalize(filePath), fs.readFileSync(filePath).toString());
+        const filePath = path_1.default.join(options.sourcesRoot, typing);
+        FILES.set(path_1.default.normalize(filePath), fs_1.default.readFileSync(filePath).toString());
     });
-    const basePath = path.join(options.sourcesRoot, '..');
+    const basePath = path_1.default.join(options.sourcesRoot, '..');
     const compilerOptions = ts.convertCompilerOptionsFromJson(options.compilerOptions, basePath).options;
     const host = new typeScriptLanguageServiceHost_1.TypeScriptLanguageServiceHost(ts, FILES, compilerOptions);
     return ts.createLanguageService(host);
@@ -327,12 +327,12 @@ function markNodes(ts, languageService, options) {
             if (importText.endsWith('.js')) { // ESM: code imports require to be relative and to have a '.js' file extension
                 importText = importText.substr(0, importText.length - 3);
             }
-            fullPath = path.join(path.dirname(nodeSourceFile.fileName), importText);
+            fullPath = path_1.default.join(path_1.default.dirname(nodeSourceFile.fileName), importText);
         }
         else {
             fullPath = importText;
         }
-        if (fs.existsSync(fullPath + '.ts')) {
+        if (fs_1.default.existsSync(fullPath + '.ts')) {
             fullPath = fullPath + '.ts';
         }
         else {
@@ -340,9 +340,9 @@ function markNodes(ts, languageService, options) {
         }
         enqueueFile(fullPath);
     }
-    options.entryPoints.forEach(moduleId => enqueueFile(path.join(options.sourcesRoot, moduleId)));
+    options.entryPoints.forEach(moduleId => enqueueFile(path_1.default.join(options.sourcesRoot, moduleId)));
     // Add fake usage files
-    options.inlineEntryPoints.forEach((_, index) => enqueueFile(path.join(options.sourcesRoot, `inlineEntryPoint.${index}.ts`)));
+    options.inlineEntryPoints.forEach((_, index) => enqueueFile(path_1.default.join(options.sourcesRoot, `inlineEntryPoint.${index}.ts`)));
     let step = 0;
     const checker = program.getTypeChecker();
     while (black_queue.length > 0 || gray_queue.length > 0) {

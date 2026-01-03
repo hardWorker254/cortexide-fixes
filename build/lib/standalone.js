@@ -41,8 +41,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.extractEditor = extractEditor;
-const fs = require("fs");
-const path = require("path");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const tss = __importStar(require("./treeshaking"));
 const dirCache = {};
 function writeFile(filePath, contents) {
@@ -51,21 +51,21 @@ function writeFile(filePath, contents) {
             return;
         }
         dirCache[dirPath] = true;
-        ensureDirs(path.dirname(dirPath));
-        if (fs.existsSync(dirPath)) {
+        ensureDirs(path_1.default.dirname(dirPath));
+        if (fs_1.default.existsSync(dirPath)) {
             return;
         }
-        fs.mkdirSync(dirPath);
+        fs_1.default.mkdirSync(dirPath);
     }
-    ensureDirs(path.dirname(filePath));
-    fs.writeFileSync(filePath, contents);
+    ensureDirs(path_1.default.dirname(filePath));
+    fs_1.default.writeFileSync(filePath, contents);
 }
 function extractEditor(options) {
     const ts = require('typescript');
-    const tsConfig = JSON.parse(fs.readFileSync(path.join(options.sourcesRoot, 'tsconfig.monaco.json')).toString());
+    const tsConfig = JSON.parse(fs_1.default.readFileSync(path_1.default.join(options.sourcesRoot, 'tsconfig.monaco.json')).toString());
     let compilerOptions;
     if (tsConfig.extends) {
-        compilerOptions = Object.assign({}, require(path.join(options.sourcesRoot, tsConfig.extends)).compilerOptions, tsConfig.compilerOptions);
+        compilerOptions = Object.assign({}, require(path_1.default.join(options.sourcesRoot, tsConfig.extends)).compilerOptions, tsConfig.compilerOptions);
         delete tsConfig.extends;
     }
     else {
@@ -85,8 +85,8 @@ function extractEditor(options) {
     const result = tss.shake(options);
     for (const fileName in result) {
         if (result.hasOwnProperty(fileName)) {
-            const relativePath = path.relative(options.sourcesRoot, fileName);
-            writeFile(path.join(options.destRoot, relativePath), result[fileName]);
+            const relativePath = path_1.default.relative(options.sourcesRoot, fileName);
+            writeFile(path_1.default.join(options.destRoot, relativePath), result[fileName]);
         }
     }
     const copied = {};
@@ -95,20 +95,20 @@ function extractEditor(options) {
             return;
         }
         copied[fileName] = true;
-        if (path.isAbsolute(fileName)) {
-            const relativePath = path.relative(options.sourcesRoot, fileName);
-            const dstPath = path.join(options.destRoot, toFileName ?? relativePath);
-            writeFile(dstPath, fs.readFileSync(fileName));
+        if (path_1.default.isAbsolute(fileName)) {
+            const relativePath = path_1.default.relative(options.sourcesRoot, fileName);
+            const dstPath = path_1.default.join(options.destRoot, toFileName ?? relativePath);
+            writeFile(dstPath, fs_1.default.readFileSync(fileName));
         }
         else {
-            const srcPath = path.join(options.sourcesRoot, fileName);
-            const dstPath = path.join(options.destRoot, toFileName ?? fileName);
-            writeFile(dstPath, fs.readFileSync(srcPath));
+            const srcPath = path_1.default.join(options.sourcesRoot, fileName);
+            const dstPath = path_1.default.join(options.destRoot, toFileName ?? fileName);
+            writeFile(dstPath, fs_1.default.readFileSync(srcPath));
         }
     };
     const writeOutputFile = (fileName, contents) => {
-        const relativePath = path.isAbsolute(fileName) ? path.relative(options.sourcesRoot, fileName) : fileName;
-        writeFile(path.join(options.destRoot, relativePath), contents);
+        const relativePath = path_1.default.isAbsolute(fileName) ? path_1.default.relative(options.sourcesRoot, fileName) : fileName;
+        writeFile(path_1.default.join(options.destRoot, relativePath), contents);
     };
     for (const fileName in result) {
         if (result.hasOwnProperty(fileName)) {
@@ -118,14 +118,14 @@ function extractEditor(options) {
                 const importedFileName = info.importedFiles[i].fileName;
                 let importedFilePath = importedFileName;
                 if (/(^\.\/)|(^\.\.\/)/.test(importedFilePath)) {
-                    importedFilePath = path.join(path.dirname(fileName), importedFilePath);
+                    importedFilePath = path_1.default.join(path_1.default.dirname(fileName), importedFilePath);
                 }
                 if (/\.css$/.test(importedFilePath)) {
                     transportCSS(importedFilePath, copyFile, writeOutputFile);
                 }
                 else {
-                    const pathToCopy = path.join(options.sourcesRoot, importedFilePath);
-                    if (fs.existsSync(pathToCopy) && !fs.statSync(pathToCopy).isDirectory()) {
+                    const pathToCopy = path_1.default.join(options.sourcesRoot, importedFilePath);
+                    if (fs_1.default.existsSync(pathToCopy) && !fs_1.default.statSync(pathToCopy).isDirectory()) {
                         copyFile(importedFilePath);
                     }
                 }
@@ -145,7 +145,7 @@ function transportCSS(module, enqueue, write) {
     if (!/\.css/.test(module)) {
         return false;
     }
-    const fileContents = fs.readFileSync(module).toString();
+    const fileContents = fs_1.default.readFileSync(module).toString();
     const inlineResources = 'base64'; // see https://github.com/microsoft/monaco-editor/issues/148
     const newContents = _rewriteOrInlineUrls(fileContents, inlineResources === 'base64');
     write(module, newContents);
@@ -155,12 +155,12 @@ function transportCSS(module, enqueue, write) {
             const fontMatch = url.match(/^(.*).ttf\?(.*)$/);
             if (fontMatch) {
                 const relativeFontPath = `${fontMatch[1]}.ttf`; // trim the query parameter
-                const fontPath = path.join(path.dirname(module), relativeFontPath);
+                const fontPath = path_1.default.join(path_1.default.dirname(module), relativeFontPath);
                 enqueue(fontPath);
                 return relativeFontPath;
             }
-            const imagePath = path.join(path.dirname(module), url);
-            const fileContents = fs.readFileSync(imagePath);
+            const imagePath = path_1.default.join(path_1.default.dirname(module), url);
+            const fileContents = fs_1.default.readFileSync(imagePath);
             const MIME = /\.svg$/.test(url) ? 'image/svg+xml' : 'image/png';
             let DATA = ';base64,' + fileContents.toString('base64');
             if (!forceBase64 && /\.svg$/.test(url)) {

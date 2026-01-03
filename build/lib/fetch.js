@@ -3,16 +3,19 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.fetchUrls = fetchUrls;
 exports.fetchUrl = fetchUrl;
 exports.fetchGithub = fetchGithub;
-const event_stream_1 = require("event-stream");
-const vinyl_1 = require("vinyl");
-const fancy_log_1 = require("fancy-log");
-const ansi_colors_1 = require("ansi-colors");
-const crypto_1 = require("crypto");
-const through2_1 = require("through2");
+const event_stream_1 = __importDefault(require("event-stream"));
+const vinyl_1 = __importDefault(require("vinyl"));
+const fancy_log_1 = __importDefault(require("fancy-log"));
+const ansi_colors_1 = __importDefault(require("ansi-colors"));
+const crypto_1 = __importDefault(require("crypto"));
+const through2_1 = __importDefault(require("through2"));
 function fetchUrls(urls, options) {
     if (options === undefined) {
         options = {};
@@ -135,3 +138,4 @@ function fetchGithub(repo, options) {
         }
     }));
 }
+//# sourceMappingURL=fetch.js.map

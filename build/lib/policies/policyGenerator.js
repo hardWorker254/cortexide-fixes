@@ -41,7 +41,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const minimist_1 = __importDefault(require("minimist"));
-const fs = require("fs");
+const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const JSONC = __importStar(require("jsonc-parser"));
 const booleanPolicy_1 = require("./booleanPolicy");
@@ -180,11 +180,11 @@ async function windowsMain(policies, translations) {
     const { admx, adml } = (0, render_1.renderGP)(product, policies, translations);
     await fs_1.promises.rm(root, { recursive: true, force: true });
     await fs_1.promises.mkdir(root, { recursive: true });
-    await fs_1.promises.writeFile(path.join(root, `${product.win32RegValueName}.admx`), admx.replace(/\r?\n/g, '\n'));
+    await fs_1.promises.writeFile(path_1.default.join(root, `${product.win32RegValueName}.admx`), admx.replace(/\r?\n/g, '\n'));
     for (const { languageId, contents } of adml) {
-        const languagePath = path.join(root, languageId === 'en-us' ? 'en-us' : types_1.Languages[languageId]);
+        const languagePath = path_1.default.join(root, languageId === 'en-us' ? 'en-us' : types_1.Languages[languageId]);
         await fs_1.promises.mkdir(languagePath, { recursive: true });
-        await fs_1.promises.writeFile(path.join(languagePath, `${product.win32RegValueName}.adml`), contents.replace(/\r?\n/g, '\n'));
+        await fs_1.promises.writeFile(path_1.default.join(languagePath, `${product.win32RegValueName}.adml`), contents.replace(/\r?\n/g, '\n'));
     }
 }
 async function darwinMain(policies, translations) {
@@ -196,11 +196,11 @@ async function darwinMain(policies, translations) {
     const { profile, manifests } = (0, render_1.renderMacOSPolicy)(product, policies, translations);
     await fs_1.promises.rm(root, { recursive: true, force: true });
     await fs_1.promises.mkdir(root, { recursive: true });
-    await fs_1.promises.writeFile(path.join(root, `${bundleIdentifier}.mobileconfig`), profile.replace(/\r?\n/g, '\n'));
+    await fs_1.promises.writeFile(path_1.default.join(root, `${bundleIdentifier}.mobileconfig`), profile.replace(/\r?\n/g, '\n'));
     for (const { languageId, contents } of manifests) {
-        const languagePath = path.join(root, languageId === 'en-us' ? 'en-us' : types_1.Languages[languageId]);
+        const languagePath = path_1.default.join(root, languageId === 'en-us' ? 'en-us' : types_1.Languages[languageId]);
         await fs_1.promises.mkdir(languagePath, { recursive: true });
-        await fs_1.promises.writeFile(path.join(languagePath, `${bundleIdentifier}.plist`), contents.replace(/\r?\n/g, '\n'));
+        await fs_1.promises.writeFile(path_1.default.join(languagePath, `${bundleIdentifier}.plist`), contents.replace(/\r?\n/g, '\n'));
     }
 }
 async function linuxMain(policies) {
@@ -208,7 +208,7 @@ async function linuxMain(policies) {
     const policyFileContents = JSON.stringify((0, render_1.renderJsonPolicies)(policies), undefined, 4);
     await fs_1.promises.rm(root, { recursive: true, force: true });
     await fs_1.promises.mkdir(root, { recursive: true });
-    const jsonPath = path.join(root, `policy.json`);
+    const jsonPath = path_1.default.join(root, `policy.json`);
     await fs_1.promises.writeFile(jsonPath, policyFileContents.replace(/\r?\n/g, '\n'));
 }
 async function main() {

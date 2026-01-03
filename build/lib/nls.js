@@ -12,7 +12,7 @@ const lazy_js_1 = __importDefault(require("lazy.js"));
 const event_stream_1 = require("event-stream");
 const vinyl_1 = __importDefault(require("vinyl"));
 const source_map_1 = __importDefault(require("source-map"));
-const path = require("path");
+const path_1 = __importDefault(require("path"));
 const gulp_sort_1 = __importDefault(require("gulp-sort"));
 var CollectStepResult;
 (function (CollectStepResult) {
@@ -60,7 +60,7 @@ function nls(options) {
         }
         const root = f.sourceMap.sourceRoot;
         if (root) {
-            source = path.join(root, source);
+            source = path_1.default.join(root, source);
         }
         const typescript = f.sourceMap.sourcesContent[0];
         if (!typescript) {
@@ -320,7 +320,7 @@ var _nls;
                 generated.column += lengthDiff;
                 patches.pop();
             }
-            source = rsm.sourceRoot ? path.relative(rsm.sourceRoot, m.source) : m.source;
+            source = rsm.sourceRoot ? path_1.default.relative(rsm.sourceRoot, m.source) : m.source;
             source = source.replace(/\\/g, '/');
             smg.addMapping({ source, name: m.name, original, generated });
         }, null, source_map_1.default.SourceMapConsumer.GENERATED_ORDER);

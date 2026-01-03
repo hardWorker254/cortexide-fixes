@@ -42,11 +42,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.bundleTask = bundleTask;
 exports.minifyTask = minifyTask;
-const event_stream_1 = require("event-stream");
+const event_stream_1 = __importDefault(require("event-stream"));
 const gulp_1 = __importDefault(require("gulp"));
-const gulp_filter_1 = require("gulp-filter");
-const path = require("path");
-const fs = require("fs");
+const gulp_filter_1 = __importDefault(require("gulp-filter"));
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const pump_1 = __importDefault(require("pump"));
 const vinyl_1 = __importDefault(require("vinyl"));
 const bundle = __importStar(require("./bundle"));
@@ -55,19 +55,19 @@ const gulp_sourcemaps_1 = __importDefault(require("gulp-sourcemaps"));
 const fancy_log_1 = __importDefault(require("fancy-log"));
 const ansi_colors_1 = __importDefault(require("ansi-colors"));
 const tsconfigUtils_1 = require("./tsconfigUtils");
-const REPO_ROOT_PATH = path.join(__dirname, '../..');
+const REPO_ROOT_PATH = path_1.default.join(__dirname, '../..');
 const DEFAULT_FILE_HEADER = [
     '/*!--------------------------------------------------------',
     ' * Copyright (C) Microsoft Corporation. All rights reserved.',
     ' *--------------------------------------------------------*/'
 ].join('\n');
 function bundleESMTask(opts) {
-    const resourcesStream = event_stream_1.through(); // this stream will contain the resources
-    const bundlesStream = event_stream_1.through(); // this stream will contain the bundled files
+    const resourcesStream = event_stream_1.default.through(); // this stream will contain the resources
+    const bundlesStream = event_stream_1.default.through(); // this stream will contain the bundled files
     const target = getBuildTarget();
     const entryPoints = opts.entryPoints.map(entryPoint => {
         if (typeof entryPoint === 'string') {
-            return { name: path.parse(entryPoint).name };
+            return { name: path_1.default.parse(entryPoint).name };
         }
         return entryPoint;
     });
@@ -85,14 +85,14 @@ function bundleESMTask(opts) {
             };
             // TS Boilerplate
             if (!opts.skipTSBoilerplateRemoval?.(entryPoint.name)) {
-                const tslibPath = path.join(require.resolve('tslib'), '../tslib.es6.js');
-                banner.js += await fs.promises.readFile(tslibPath, 'utf-8');
+                const tslibPath = path_1.default.join(require.resolve('tslib'), '../tslib.es6.js');
+                banner.js += await fs_1.default.promises.readFile(tslibPath, 'utf-8');
             }
             const contentsMapper = {
                 name: 'contents-mapper',
                 setup(build) {
                     build.onLoad({ filter: /\.js$/ }, async ({ path }) => {
-                        const contents = await fs.promises.readFile(path, 'utf-8');
+                        const contents = await fs_1.default.promises.readFile(path, 'utf-8');
                         // TS Boilerplate
                         let newContents;
                         if (!opts.skipTSBoilerplateRemoval?.(entryPoint.name)) {
@@ -116,7 +116,7 @@ function bundleESMTask(opts) {
                     // We inline selected modules that are we depend on on startup without
                     // a conditional `await import(...)` by hooking into the resolution.
                     build.onResolve({ filter: /^minimist$/ }, () => {
-                        return { path: path.join(REPO_ROOT_PATH, 'node_modules', 'minimist', 'index.js'), external: false };
+                        return { path: path_1.default.join(REPO_ROOT_PATH, 'node_modules', 'minimist', 'index.js'), external: false };
                     });
                 },
             };
@@ -138,11 +138,11 @@ function bundleESMTask(opts) {
                 banner: entryPoint.name === 'vs/workbench/workbench.web.main' ? undefined : banner, // TODO@esm remove line when we stop supporting web-amd-esm-bridge
                 entryPoints: [
                     {
-                        in: path.join(REPO_ROOT_PATH, opts.src, `${entryPoint.name}.js`),
+                        in: path_1.default.join(REPO_ROOT_PATH, opts.src, `${entryPoint.name}.js`),
                         out: dest,
                     }
                 ],
-                outdir: path.join(REPO_ROOT_PATH, opts.src),
+                outdir: path_1.default.join(REPO_ROOT_PATH, opts.src),
                 write: false, // enables res.outputFiles
                 metafile: true, // enables res.metafile
                 // minify: NOT enabled because we have a separate minify task that takes care of the TSLib banner as well
@@ -156,7 +156,7 @@ function bundleESMTask(opts) {
                         contents: Buffer.from(file.contents),
                         sourceMap: sourceMapFile ? JSON.parse(sourceMapFile.text) : undefined, // support gulp-sourcemaps
                         path: file.path,
-                        base: path.join(REPO_ROOT_PATH, opts.src)
+                        base: path_1.default.join(REPO_ROOT_PATH, opts.src)
                     };
                     files.push(new vinyl_1.default(fileProps));
                 }
@@ -168,11 +168,11 @@ function bundleESMTask(opts) {
     };
     bundleAsync().then((output) => {
         // bundle output (JS, CSS, SVG...)
-        event_stream_1.readArray(output.files).pipe(bundlesStream);
+        event_stream_1.default.readArray(output.files).pipe(bundlesStream);
         // forward all resources
         gulp_1.default.src(opts.resources ?? [], { base: `${opts.src}`, allowEmpty: true }).pipe(resourcesStream);
     });
-    const result = event_stream_1.merge(bundlesStream, resourcesStream);
+    const result = event_stream_1.default.merge(bundlesStream, resourcesStream);
     return result
         .pipe(gulp_sourcemaps_1.default.write('./', {
         sourceRoot: undefined,
@@ -190,9 +190,9 @@ function minifyTask(src, sourceMapBaseUrl) {
     const target = getBuildTarget();
     return cb => {
         const svgmin = require('gulp-svgmin');
-        const esbuildFilter = (0, gulp_filter_1)('**/*.{js,css}', { restore: true });
-        const svgFilter = (0, gulp_filter_1)('**/*.svg', { restore: true });
-        (0, pump_1.default)(gulp_1.default.src([src + '/**', '!' + src + '/**/*.map']), esbuildFilter, gulp_sourcemaps_1.default.init({ loadMaps: true }), event_stream_1.map((f, cb) => {
+        const esbuildFilter = (0, gulp_filter_1.default)('**/*.{js,css}', { restore: true });
+        const svgFilter = (0, gulp_filter_1.default)('**/*.svg', { restore: true });
+        (0, pump_1.default)(gulp_1.default.src([src + '/**', '!' + src + '/**/*.map']), esbuildFilter, gulp_sourcemaps_1.default.init({ loadMaps: true }), event_stream_1.default.map((f, cb) => {
             esbuild_1.default.build({
                 entryPoints: [f.path],
                 minify: true,
@@ -225,7 +225,7 @@ function minifyTask(src, sourceMapBaseUrl) {
     };
 }
 function getBuildTarget() {
-    const tsconfigPath = path.join(REPO_ROOT_PATH, 'src', 'tsconfig.base.json');
+    const tsconfigPath = path_1.default.join(REPO_ROOT_PATH, 'src', 'tsconfig.base.json');
     return (0, tsconfigUtils_1.getTargetStringFromTsConfig)(tsconfigPath);
 }
 //# sourceMappingURL=optimize.js.map

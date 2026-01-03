@@ -9,8 +9,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Mangler = void 0;
 const node_v8_1 = __importDefault(require("node:v8"));
-const fs = require("fs");
-const path = require("path");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const process_1 = require("process");
 const source_map_1 = require("source-map");
 const typescript_1 = __importDefault(require("typescript"));
@@ -351,7 +351,7 @@ class Mangler {
         this.projectPath = projectPath;
         this.log = log;
         this.config = config;
-        this.renameWorkerPool = workerpool_1.default.pool(path.join(__dirname, 'renameWorker.js'), {
+        this.renameWorkerPool = workerpool_1.default.pool(path_1.default.join(__dirname, 'renameWorker.js'), {
             maxWorkers: 4,
             minWorkers: 'max'
         });
@@ -546,7 +546,7 @@ class Mangler {
         let savedBytes = 0;
         for (const item of service.getProgram().getSourceFiles()) {
             const { mapRoot, sourceRoot } = service.getProgram().getCompilerOptions();
-            const projectDir = path.dirname(this.projectPath);
+            const projectDir = path_1.default.dirname(this.projectPath);
             const sourceMapRoot = mapRoot ?? (0, url_1.pathToFileURL)(sourceRoot ?? projectDir).toString();
             // source maps
             let generator;
@@ -558,7 +558,7 @@ class Mangler {
             }
             else {
                 // source map generator
-                const relativeFileName = normalize(path.relative(projectDir, item.fileName));
+                const relativeFileName = normalize(path_1.default.relative(projectDir, item.fileName));
                 const mappingsByLine = new Map();
                 // apply renames
                 edits.sort((a, b) => b.offset - a.offset);
@@ -597,7 +597,7 @@ class Mangler {
                     });
                 }
                 // source map generation, make sure to get mappings per line correct
-                generator = new source_map_1.SourceMapGenerator({ file: path.basename(item.fileName), sourceRoot: sourceMapRoot });
+                generator = new source_map_1.SourceMapGenerator({ file: path_1.default.basename(item.fileName), sourceRoot: sourceMapRoot });
                 generator.setSourceContent(relativeFileName, item.getFullText());
                 for (const [, mappings] of mappingsByLine) {
                     let lineDelta = 0;
@@ -637,21 +637,21 @@ function normalize(path) {
     return path.replace(/\\/g, '/');
 }
 async function _run() {
-    const root = path.join(__dirname, '..', '..', '..');
-    const projectBase = path.join(root, 'src');
-    const projectPath = path.join(projectBase, 'tsconfig.json');
-    const newProjectBase = path.join(path.dirname(projectBase), path.basename(projectBase) + '2');
-    fs.cpSync(projectBase, newProjectBase, { recursive: true });
+    const root = path_1.default.join(__dirname, '..', '..', '..');
+    const projectBase = path_1.default.join(root, 'src');
+    const projectPath = path_1.default.join(projectBase, 'tsconfig.json');
+    const newProjectBase = path_1.default.join(path_1.default.dirname(projectBase), path_1.default.basename(projectBase) + '2');
+    fs_1.default.cpSync(projectBase, newProjectBase, { recursive: true });
     const mangler = new Mangler(projectPath, console.log, {
         mangleExports: true,
         manglePrivateFields: true,
     });
     for (const [fileName, contents] of await mangler.computeNewFileContents(new Set(['saveState']))) {
-        const newFilePath = path.join(newProjectBase, path.relative(projectBase, fileName));
-        await fs.promises.mkdir(path.dirname(newFilePath), { recursive: true });
-        await fs.promises.writeFile(newFilePath, contents.out);
+        const newFilePath = path_1.default.join(newProjectBase, path_1.default.relative(projectBase, fileName));
+        await fs_1.default.promises.mkdir(path_1.default.dirname(newFilePath), { recursive: true });
+        await fs_1.default.promises.writeFile(newFilePath, contents.out);
         if (contents.sourceMap) {
-            await fs.promises.writeFile(newFilePath + '.map', contents.sourceMap);
+            await fs_1.default.promises.writeFile(newFilePath + '.map', contents.sourceMap);
         }
     }
 }

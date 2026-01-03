@@ -9,10 +9,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TypeScriptLanguageServiceHost = void 0;
 const typescript_1 = __importDefault(require("typescript"));
-const fs = require("fs");
-const path = require("path");
+const node_fs_1 = __importDefault(require("node:fs"));
+const node_path_1 = require("node:path");
 function normalizePath(filePath) {
-    return path.normalize(filePath);
+    return (0, node_path_1.normalize)(filePath);
 }
 /**
  * A TypeScript language service host
@@ -48,7 +48,7 @@ class TypeScriptLanguageServiceHost {
             return this.ts.ScriptSnapshot.fromString(this.topLevelFiles.get(fileName));
         }
         else {
-            return typescript_1.default.ScriptSnapshot.fromString(fs.readFileSync(fileName).toString());
+            return typescript_1.default.ScriptSnapshot.fromString(node_fs_1.default.readFileSync(fileName).toString());
         }
     }
     getScriptKind(_fileName) {

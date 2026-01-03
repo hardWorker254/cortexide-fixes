@@ -46,9 +46,9 @@ const through_1 = __importDefault(require("through"));
 const builder = __importStar(require("./builder"));
 const typescript_1 = __importDefault(require("typescript"));
 const stream_1 = require("stream");
-const path = require("path");
+const path_1 = require("path");
 const utils_1 = require("./utils");
-const fs_1 = require("fs");
+const fs = __importStar(require("fs"));
 const fancy_log_1 = __importDefault(require("fancy-log"));
 const transpiler_1 = require("./transpiler");
 const colors = require("ansi-colors");
@@ -80,7 +80,7 @@ function create(projectPath, existingOptions, config, onError = _defaultOnError)
         printDiagnostic(parsed.error);
         return createNullCompiler();
     }
-    const cmdLine = typescript_1.default.parseJsonConfigFileContent(parsed.config, typescript_1.default.sys, (0, path.dirname)(projectPath), existingOptions);
+    const cmdLine = typescript_1.default.parseJsonConfigFileContent(parsed.config, typescript_1.default.sys, (0, path_1.dirname)(projectPath), existingOptions);
     if (cmdLine.errors.length > 0) {
         cmdLine.errors.forEach(printDiagnostic);
         return createNullCompiler();
@@ -152,12 +152,12 @@ function create(projectPath, existingOptions, config, onError = _defaultOnError)
                 let path;
                 for (; more && _pos < _fileNames.length; _pos++) {
                     path = _fileNames[_pos];
-					more = this.push(new vinyl_1.default({
-						path,
-						contents: fs_1.readFileSync(path),
-						stat: fs_1.statSync(path),
+                    more = this.push(new vinyl_1.default({
+                        path,
+                        contents: fs.readFileSync(path),
+                        stat: fs.statSync(path),
                         cwd: opts && opts.cwd,
-                        base: opts && opts.base || (0, path.dirname)(projectPath)
+                        base: opts && opts.base || (0, path_1.dirname)(projectPath)
                     }));
                 }
                 if (_pos >= _fileNames.length) {
