@@ -1885,6 +1885,72 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 
 	// returns true when the tool call is waiting for user approval
 	/**
+	 * Parses JSON tool call format from text response.
+	 * Some models output tool calls as JSON text instead of using native tool calling.
+	 * Example: {"name": "delete_file_or_folder", "arguments": {"uri": "/path", "is_recursive": true}}
+	 */
+	private _parseJSONToolCallFromText(text: string): { toolName: ToolName, toolParams: RawToolParamsObj } | null {
+		try {
+			// Try to find JSON object in text (may be wrapped in markdown code blocks or plain text)
+			let jsonStr = text.trim()
+
+			// Remove markdown code blocks if present
+			const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
+			if (codeBlockMatch) {
+				jsonStr = codeBlockMatch[1].trim()
+			}
+
+			// Try to find JSON object pattern - be more flexible with whitespace
+			// Look for opening brace, then try to find matching closing brace
+			const openBraceIdx = jsonStr.indexOf('{')
+			if (openBraceIdx === -1) {
+				return null
+			}
+
+			// Find matching closing brace
+			let braceCount = 0
+			let closeBraceIdx = -1
+			for (let i = openBraceIdx; i < jsonStr.length; i++) {
+				if (jsonStr[i] === '{') braceCount++
+				if (jsonStr[i] === '}') {
+					braceCount--
+					if (braceCount === 0) {
+						closeBraceIdx = i
+						break
+					}
+				}
+			}
+
+			if (closeBraceIdx === -1) {
+				return null
+			}
+
+			const jsonSubstring = jsonStr.substring(openBraceIdx, closeBraceIdx + 1)
+			const parsed = JSON.parse(jsonSubstring)
+
+			// Check if it's a tool call format
+			if (typeof parsed === 'object' && parsed !== null && 'name' in parsed) {
+				const toolName = parsed.name
+				const toolParams = parsed.arguments || parsed.params || {}
+
+				// Validate tool name is a valid ToolName
+				// Note: We'll validate this when we try to use it
+				if (typeof toolName === 'string' && typeof toolParams === 'object' && toolParams !== null) {
+					return {
+						toolName: toolName as ToolName,
+						toolParams: toolParams as RawToolParamsObj
+					}
+				}
+			}
+		} catch (error) {
+			// Not valid JSON or not a tool call format
+			return null
+		}
+
+		return null
+	}
+
+	/**
 	 * Synthesizes a tool call from user intent when the model refuses to use tools.
 	 * This ensures Agent Mode works even with models that don't follow tool calling instructions.
 	 */
@@ -1998,8 +2064,43 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 					}
 				}
 			}
+		} else if (lowerRequest.includes('add') && (lowerRequest.includes('comment') || lowerRequest.includes('note') || lowerRequest.includes('todo'))) {
+			// User wants to add a comment - need to find the file first
+			// Extract file name from request (e.g., "add comment to test.js" -> "test.js")
+			const fileMatch = originalRequest.match(/(?:to|in|on|at)\s+([\w\/\.\-]+\.\w+)/i) ||
+				originalRequest.match(/([\w\/\.\-]+\.\w+)/i)
+			if (fileMatch) {
+				return {
+					toolName: 'read_file',
+					toolParams: {
+						uri: fileMatch[1],
+						start_line: '1',
+						end_line: '100'
+					}
+				}
+			}
+			// If no file specified, search for likely files
+			const keywords = extractKeywords(originalRequest).filter(k => !['comment', 'note', 'todo', 'add'].includes(k.toLowerCase()))
+			return {
+				toolName: 'search_for_files',
+				toolParams: {
+					query: keywords.length > 0 ? keywords.join(' ') : 'file'
+				}
+			}
 		} else if (lowerRequest.includes('edit') || lowerRequest.includes('modify') || lowerRequest.includes('change') || lowerRequest.includes('update')) {
 			// User wants to edit a file - first need to find/read it
+			const fileMatch = originalRequest.match(/(?:to|in|on|at)\s+([\w\/\.\-]+\.\w+)/i) ||
+				originalRequest.match(/([\w\/\.\-]+\.\w+)/i)
+			if (fileMatch) {
+				return {
+					toolName: 'read_file',
+					toolParams: {
+						uri: fileMatch[1],
+						start_line: '1',
+						end_line: '100'
+					}
+				}
+			}
 			const keywords = extractKeywords(originalRequest)
 			return {
 				toolName: 'search_for_files',
@@ -2240,7 +2341,13 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 				// Check YOLO mode for NL shell commands
 				const isNLCommand = isBuiltInTool && toolName === 'run_nl_command';
 
+				// Check if auto-approve is explicitly enabled for this approval type
+				// Default to true for 'edits' if not explicitly set (backward compatible)
 				let shouldAutoApprove = this._settingsService.state.globalSettings.autoApprove[approvalType];
+				// If autoApprove is undefined for 'edits', default to true (basic operations should work by default)
+				if (approvalType === 'edits' && shouldAutoApprove === undefined) {
+					shouldAutoApprove = true;
+				}
 				let riskScore: { riskScore: number; confidenceScore: number; riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; riskFactors: string[]; confidenceFactors: string[] } | undefined;
 
 				// If YOLO mode is enabled and this is an NL command, check if it's safe
@@ -2270,43 +2377,51 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 					}
 				}
 
-				// If YOLO mode is enabled and this is an edit operation, score the risk
-				if (isEditOperation && this._settingsService.state.globalSettings.enableYOLOMode) {
+				// If this is an edit operation, score the risk (for both YOLO mode and to respect autoApprove safely)
+				if (isEditOperation) {
 					try {
 						const editContext = await this._buildEditContext(toolName, toolParams, threadId);
 						riskScore = await this._editRiskScoringService.scoreEdit(editContext);
 
-						const yoloRiskThreshold = this._settingsService.state.globalSettings.yoloRiskThreshold ?? 0.2;
-						const yoloConfidenceThreshold = this._settingsService.state.globalSettings.yoloConfidenceThreshold ?? 0.7;
-
-						// Auto-approve if risk is low and confidence is high
-						if (riskScore.riskScore < yoloRiskThreshold && riskScore.confidenceScore > yoloConfidenceThreshold) {
-							shouldAutoApprove = true;
-							// Track YOLO auto-approval metric
-							this._metricsService.capture('yolo_auto_approved', {
-								riskScore: riskScore.riskScore,
-								confidenceScore: riskScore.confidenceScore,
-								riskLevel: riskScore.riskLevel,
-								operation: toolName,
-							});
-
-							// Show non-intrusive notification for medium-risk auto-applies (not very low risk)
-							// Very low risk (< 0.1) edits are silent to avoid notification fatigue
-							if (riskScore.riskScore >= 0.1) {
-								this._showAutoApplyNotification(editContext, riskScore, toolName);
-							}
-						} else if (riskScore.riskLevel === 'HIGH') {
+						// If autoApprove is enabled, respect it for LOW and MEDIUM risk operations
+						// Only block HIGH risk operations even when autoApprove is true (safety)
+						if (shouldAutoApprove && riskScore.riskLevel === 'HIGH') {
 							// High-risk edits always require approval, even if autoApprove is true
 							shouldAutoApprove = false;
 							// Track high-risk blocked metric
-							this._metricsService.capture('yolo_high_risk_blocked', {
+							this._metricsService.capture('high_risk_blocked_despite_autoapprove', {
 								riskScore: riskScore.riskScore,
 								confidenceScore: riskScore.confidenceScore,
 								operation: toolName,
 							});
 						}
+
+						// If YOLO mode is enabled, use risk thresholds for additional auto-approval
+						if (this._settingsService.state.globalSettings.enableYOLOMode) {
+							const yoloRiskThreshold = this._settingsService.state.globalSettings.yoloRiskThreshold ?? 0.2;
+							const yoloConfidenceThreshold = this._settingsService.state.globalSettings.yoloConfidenceThreshold ?? 0.7;
+
+							// Auto-approve if risk is low and confidence is high (even if autoApprove wasn't explicitly set)
+							if (riskScore.riskScore < yoloRiskThreshold && riskScore.confidenceScore > yoloConfidenceThreshold) {
+								shouldAutoApprove = true;
+								// Track YOLO auto-approval metric
+								this._metricsService.capture('yolo_auto_approved', {
+									riskScore: riskScore.riskScore,
+									confidenceScore: riskScore.confidenceScore,
+									riskLevel: riskScore.riskLevel,
+									operation: toolName,
+								});
+
+								// Show non-intrusive notification for medium-risk auto-applies (not very low risk)
+								// Very low risk (< 0.1) edits are silent to avoid notification fatigue
+								if (riskScore.riskScore >= 0.1) {
+									this._showAutoApplyNotification(editContext, riskScore, toolName);
+								}
+							}
+						}
 					} catch (error) {
 						// If risk scoring fails, fall back to normal approval flow
+						// If autoApprove was already true, keep it true (don't block due to scoring failure)
 						console.debug('[ChatThreadService] Risk scoring failed, using normal approval:', error);
 					}
 				}
@@ -3485,7 +3600,52 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 				}
 
 				// llm res success
-				const { toolCall, info } = llmRes
+				let { toolCall, info } = llmRes
+
+				// CRITICAL: Check if model output JSON tool call format as text
+				// Some models output tool calls as JSON text instead of using native tool calling
+				// Parse it and convert to proper tool call format
+				if (!toolCall && info.fullText.trim()) {
+					const parsedToolCall = this._parseJSONToolCallFromText(info.fullText)
+					if (parsedToolCall) {
+						// Found JSON tool call in text - convert to proper format
+						const toolId = generateUuid()
+						toolCall = {
+							name: parsedToolCall.toolName,
+							rawParams: parsedToolCall.toolParams,
+							id: toolId,
+							isDone: true,
+							doneParams: Object.keys(parsedToolCall.toolParams)
+						}
+						// Remove the JSON from text since we're executing it as a tool call
+						// Try to remove just the JSON part, keep any surrounding text
+						const openBraceIdx = info.fullText.indexOf('{')
+						if (openBraceIdx !== -1) {
+							// Find matching closing brace
+							let braceCount = 0
+							let closeBraceIdx = -1
+							for (let i = openBraceIdx; i < info.fullText.length; i++) {
+								if (info.fullText[i] === '{') braceCount++
+								if (info.fullText[i] === '}') {
+									braceCount--
+									if (braceCount === 0) {
+										closeBraceIdx = i
+										break
+									}
+								}
+							}
+
+							if (closeBraceIdx !== -1) {
+								const beforeJson = info.fullText.substring(0, openBraceIdx).trim()
+								const afterJson = info.fullText.substring(closeBraceIdx + 1).trim()
+								info = {
+									...info,
+									fullText: [beforeJson, afterJson].filter(s => s.length > 0).join('\n\n').trim() || ''
+								}
+							}
+						}
+					}
+				}
 
 				// Track if we synthesized a tool and added a message (to prevent duplicate messages)
 				let toolSynthesizedAndMessageAdded = false
@@ -3504,6 +3664,26 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 					// BUT: If we've already synthesized tools once and model didn't use them, don't try again
 					// This prevents infinite loops when models have specialToolFormat set but don't actually support tools
 					modelSupportsTools = !!capabilities.specialToolFormat && !hasSynthesizedForRequest
+				}
+
+				// Check if we're in normal mode and user is trying to do something that requires tools
+				if (chatMode === 'normal' && !toolCall && info.fullText.trim() && originalUserMessage) {
+					const userRequest = originalUserMessage.displayContent?.toLowerCase() || ''
+					const actionWords = ['add', 'create', 'edit', 'delete', 'remove', 'update', 'modify', 'change', 'make', 'write', 'build', 'implement', 'fix', 'run', 'execute']
+					const isActionRequest = actionWords.some(word => userRequest.includes(word))
+
+					if (isActionRequest) {
+						// User is trying to do something that requires tools, but we're in normal mode
+						this._addMessageToThread(threadId, {
+							role: 'assistant',
+							displayContent: `I understand you want to ${originalUserMessage.displayContent}, but I'm currently in **Normal** mode which doesn't allow file operations.\n\nTo perform file edits, create files, or run commands, please switch to **Agent** mode using the dropdown in the chat interface.\n\n**Normal mode**: Chat only, no file operations\n**Gather mode**: Can read files, but can't edit\n**Agent mode**: Full access to edit files, create files, and run commands`,
+							reasoning: '',
+							anthropicReasoning: null
+						})
+						this._setStreamState(threadId, { isRunning: 'idle', interrupt: 'not_needed' })
+						this._addUserCheckpoint({ threadId })
+						return
+					}
 				}
 
 				// Detect if Agent Mode should have used tools but didn't

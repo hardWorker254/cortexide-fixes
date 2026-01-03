@@ -519,7 +519,9 @@ export const defaultGlobalSettings: GlobalSettings = {
 	syncSCMToChat: true,
 	enableFastApply: true,
 	chatMode: 'agent',
-	autoApprove: {},
+	autoApprove: {
+		'edits': true, // Auto-approve basic file edits by default (similar to Cursor's behavior)
+	},
 	showInlineSuggestions: true,
 	includeToolLintErrors: true,
 	isOnboardingComplete: false,
