@@ -156,7 +156,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure Electron sandbox permissions
-        if: ${{ inputs.electron_tests }}
+        if: ${{ inputs.electron_tests || inputs.remote_tests }}
         run: |
           set -e
           ELECTRON_ROOT=.build/electron
