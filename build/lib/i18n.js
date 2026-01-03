@@ -15,8 +15,8 @@ exports.createXlfFilesForExtensions = createXlfFilesForExtensions;
 exports.createXlfFilesForIsl = createXlfFilesForIsl;
 exports.prepareI18nPackFiles = prepareI18nPackFiles;
 exports.prepareIslFiles = prepareIslFiles;
-const path = require("path");
-const fs = require("fs");
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const event_stream_1 = require("event-stream");
 const gulp_merge_json_1 = __importDefault(require("gulp-merge-json"));
 const vinyl_1 = __importDefault(require("vinyl"));
@@ -26,7 +26,7 @@ const fancy_log_1 = __importDefault(require("fancy-log"));
 const ansi_colors_1 = __importDefault(require("ansi-colors"));
 const iconv_lite_umd_1 = __importDefault(require("@vscode/iconv-lite-umd"));
 const l10n_dev_1 = require("@vscode/l10n-dev");
-const REPO_ROOT_PATH = path.join(__dirname, '../..');
+const REPO_ROOT_PATH = path_1.default.join(__dirname, '../..');
 function log(message, ...rest) {
     (0, fancy_log_1.default)(ansi_colors_1.default.green('[i18n]'), message, ...rest);
 }
@@ -282,8 +282,8 @@ function stripComments(content) {
     return result;
 }
 function processCoreBundleFormat(base, fileHeader, languages, json, emitter) {
-    const languageDirectory = path.join(REPO_ROOT_PATH, '..', 'vscode-loc', 'i18n');
-    if (!fs.existsSync(languageDirectory)) {
+    const languageDirectory = path_1.default.join(REPO_ROOT_PATH, '..', 'vscode-loc', 'i18n');
+    if (!fs_1.default.existsSync(languageDirectory)) {
         log(`No VS Code localization repository found. Looking at ${languageDirectory}`);
         log(`To bundle translations please check out the vscode-loc repository as a sibling of the vscode repository.`);
     }
@@ -293,10 +293,10 @@ function processCoreBundleFormat(base, fileHeader, languages, json, emitter) {
             log(`Generating nls bundles for: ${language.id}`);
         }
         const languageFolderName = language.translationId || language.id;
-        const i18nFile = path.join(languageDirectory, `vscode-language-pack-${languageFolderName}`, 'translations', 'main.i18n.json');
+        const i18nFile = path_1.default.join(languageDirectory, `vscode-language-pack-${languageFolderName}`, 'translations', 'main.i18n.json');
         let allMessages;
-        if (fs.existsSync(i18nFile)) {
-            const content = stripComments(fs.readFileSync(i18nFile, 'utf8'));
+        if (fs_1.default.existsSync(i18nFile)) {
+            const content = stripComments(fs_1.default.readFileSync(i18nFile, 'utf8'));
             allMessages = JSON.parse(content);
         }
         let nlsIndex = 0;
@@ -319,7 +319,7 @@ globalThis._VSCODE_NLS_LANGUAGE=${JSON.stringify(language.id)};`),
 }
 function processNlsFiles(opts) {
     return (0, event_stream_1.through)(function (file) {
-        const fileName = path.basename(file.path);
+        const fileName = path_1.default.basename(file.path);
         if (fileName === 'nls.keys.json') {
             try {
                 const contents = file.contents.toString('utf8');
@@ -371,7 +371,7 @@ function getResource(sourceFile) {
 }
 function createXlfFilesForCoreBundle() {
     return (0, event_stream_1.through)(function (file) {
-        const basename = path.basename(file.path);
+        const basename = path_1.default.basename(file.path);
         if (basename === 'nls.metadata.json') {
             if (file.isBuffer()) {
                 const xlfs = Object.create(null);
@@ -434,7 +434,7 @@ function createL10nBundleForExtension(extensionFolderName, prefixWithBuildFolder
             callback();
             return;
         }
-        const extension = path.extname(file.relative);
+        const extension = path_1.default.extname(file.relative);
         if (extension !== '.json') {
             const contents = file.contents.toString('utf8');
             (0, l10n_dev_1.getL10nJson)([{ contents, extension }])
@@ -486,16 +486,16 @@ function createXlfFilesForExtensions() {
     let folderStreamEndEmitted = false;
     return (0, event_stream_1.through)(function (extensionFolder) {
         const folderStream = this;
-        const stat = fs.statSync(extensionFolder.path);
+        const stat = fs_1.default.statSync(extensionFolder.path);
         if (!stat.isDirectory()) {
             return;
         }
-        const extensionFolderName = path.basename(extensionFolder.path);
+        const extensionFolderName = path_1.default.basename(extensionFolder.path);
         if (extensionFolderName === 'node_modules') {
             return;
         }
         // Get extension id and use that as the id
-        const manifest = fs.readFileSync(path.join(extensionFolder.path, 'package.json'), 'utf-8');
+        const manifest = fs_1.default.readFileSync(path_1.default.join(extensionFolder.path, 'package.json'), 'utf-8');
         const manifestJson = JSON.parse(manifest);
         const extensionId = manifestJson.publisher + '.' + manifestJson.name;
         counter++;
@@ -509,14 +509,14 @@ function createXlfFilesForExtensions() {
         (0, event_stream_1.merge)(gulp_1.default.src([`.build/extensions/${extensionFolderName}/package.nls.json`, `.build/extensions/${extensionFolderName}/**/nls.metadata.json`], { allowEmpty: true }), createL10nBundleForExtension(extensionFolderName, exports.EXTERNAL_EXTENSIONS.includes(extensionId))).pipe((0, event_stream_1.through)(function (file) {
             if (file.isBuffer()) {
                 const buffer = file.contents;
-                const basename = path.basename(file.path);
+                const basename = path_1.default.basename(file.path);
                 if (basename === 'package.nls.json') {
                     const json = JSON.parse(buffer.toString('utf8'));
                     getL10nMap().set(`extensions/${extensionId}/package`, json);
                 }
                 else if (basename === 'nls.metadata.json') {
                     const json = JSON.parse(buffer.toString('utf8'));
-                    const relPath = path.relative(`.build/extensions/${extensionFolderName}`, path.dirname(file.path));
+                    const relPath = path_1.default.relative(`.build/extensions/${extensionFolderName}`, path_1.default.dirname(file.path));
                     for (const file in json) {
                         const fileContent = json[file];
                         const info = Object.create(null);
@@ -542,7 +542,7 @@ function createXlfFilesForExtensions() {
         }, function () {
             if (_l10nMap?.size > 0) {
                 const xlfFile = new vinyl_1.default({
-                    path: path.join(extensionsProject, extensionId + '.xlf'),
+                    path: path_1.default.join(extensionsProject, extensionId + '.xlf'),
                     contents: Buffer.from((0, l10n_dev_1.getL10nXlf)(_l10nMap), 'utf8')
                 });
                 folderStream.queue(xlfFile);
@@ -565,7 +565,7 @@ function createXlfFilesForExtensions() {
 function createXlfFilesForIsl() {
     return (0, event_stream_1.through)(function (file) {
         let projectName, resourceFile;
-        if (path.basename(file.path) === 'messages.en.isl') {
+        if (path_1.default.basename(file.path) === 'messages.en.isl') {
             projectName = setupProject;
             resourceFile = 'messages.xlf';
         }
@@ -607,7 +607,7 @@ function createXlfFilesForIsl() {
         const originalPath = file.path.substring(file.cwd.length + 1, file.path.split('.')[0].length).replace(/\\/g, '/');
         xlf.addFile(originalPath, keys, messages);
         // Emit only upon all ISL files combined into single XLF instance
-        const newFilePath = path.join(projectName, resourceFile);
+        const newFilePath = path_1.default.join(projectName, resourceFile);
         const xlfFile = new vinyl_1.default({ path: newFilePath, contents: Buffer.from(xlf.toString(), 'utf-8') });
         this.queue(xlfFile);
     });
@@ -629,7 +629,7 @@ function createI18nFile(name, messages) {
         content = content.replace(/\n/g, '\r\n');
     }
     return new vinyl_1.default({
-        path: path.join(name + '.i18n.json'),
+        path: path_1.default.join(name + '.i18n.json'),
         contents: Buffer.from(content, 'utf8')
     });
 }
@@ -648,9 +648,9 @@ function prepareI18nPackFiles(resultingTranslationPaths) {
     const extensionsPacks = {};
     const errors = [];
     return (0, event_stream_1.through)(function (xlf) {
-        let project = path.basename(path.dirname(path.dirname(xlf.relative)));
+        let project = path_1.default.basename(path_1.default.dirname(path_1.default.dirname(xlf.relative)));
         // strip `-new` since vscode-extensions-loc uses the `-new` suffix to indicate that it's from the new loc pipeline
-        const resource = path.basename(path.basename(xlf.relative, '.xlf'), '-new');
+        const resource = path_1.default.basename(path_1.default.basename(xlf.relative, '.xlf'), '-new');
         if (exports.EXTERNAL_EXTENSIONS.find(e => e === resource)) {
             project = extensionsProject;
         }
@@ -725,11 +725,11 @@ function prepareIslFiles(language, innoSetupConfig) {
 function createIslFile(name, messages, language, innoSetup) {
     const content = [];
     let originalContent;
-    if (path.basename(name) === 'Default') {
-        originalContent = new TextModel(fs.readFileSync(name + '.isl', 'utf8'));
+    if (path_1.default.basename(name) === 'Default') {
+        originalContent = new TextModel(fs_1.default.readFileSync(name + '.isl', 'utf8'));
     }
     else {
-        originalContent = new TextModel(fs.readFileSync(name + '.en.isl', 'utf8'));
+        originalContent = new TextModel(fs_1.default.readFileSync(name + '.en.isl', 'utf8'));
     }
     originalContent.lines.forEach(line => {
         if (line.length > 0) {
@@ -751,7 +751,7 @@ function createIslFile(name, messages, language, innoSetup) {
             }
         }
     });
-    const basename = path.basename(name);
+    const basename = path_1.default.basename(name);
     const filePath = `${basename}.${language.id}.isl`;
     const encoded = iconv_lite_umd_1.default.encode(Buffer.from(content.join('\r\n'), 'utf8').toString(), innoSetup.codePage);
     return new vinyl_1.default({

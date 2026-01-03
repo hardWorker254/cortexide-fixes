@@ -3,6 +3,42 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VinylStat = void 0;
 exports.incremental = incremental;
@@ -24,20 +60,21 @@ exports.rebase = rebase;
 exports.filter = filter;
 exports.streamToPromise = streamToPromise;
 exports.getElectronVersion = getElectronVersion;
-const event_stream_1 = require("event-stream");
-const debounce_1 = require("debounce");
-const gulp_filter_1 = require("gulp-filter");
-const gulp_rename_1 = require("gulp-rename");
-const path = require("path");
-const fs = require("fs");
-const rimrafModule = require("rimraf");
+const es = __importStar(require("event-stream"));
+const debounce_1 = __importDefault(require("debounce"));
+const gulp_filter_1 = __importDefault(require("gulp-filter"));
+const gulp_rename_1 = __importDefault(require("gulp-rename"));
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const url_1 = require("url");
-const ternary_stream_1 = require("ternary-stream");
-const root = path.dirname(path.dirname(__dirname));
+const ternary_stream_1 = __importDefault(require("ternary-stream"));
+const root = path_1.default.dirname(path_1.default.dirname(__dirname));
+// Use require for rimraf 2.2.8 (CommonJS module, no default export)
+const rimrafModule = require('rimraf');
 const NoCancellationToken = { isCancellationRequested: () => false };
 function incremental(streamProvider, initial, supportsCancellation) {
-    const input = event_stream_1.through();
-    const output = event_stream_1.through();
+    const input = es.through();
+    const output = es.through();
     let state = 'idle';
     let buffer = Object.create(null);
     const token = !supportsCancellation ? undefined : { isCancellationRequested: () => Object.keys(buffer).length > 0 };
@@ -46,7 +83,7 @@ function incremental(streamProvider, initial, supportsCancellation) {
         const stream = !supportsCancellation ? streamProvider() : streamProvider(isCancellable ? token : NoCancellationToken);
         input
             .pipe(stream)
-            .pipe(event_stream_1.through(undefined, () => {
+            .pipe(es.through(undefined, () => {
             state = 'idle';
             eventuallyRun();
         }))
@@ -62,7 +99,7 @@ function incremental(streamProvider, initial, supportsCancellation) {
         }
         const data = paths.map(path => buffer[path]);
         buffer = Object.create(null);
-        run(event_stream_1.readArray(data), true);
+        run(es.readArray(data), true);
     }, 500);
     input.on('data', (f) => {
         buffer[f.path] = f;
@@ -70,16 +107,16 @@ function incremental(streamProvider, initial, supportsCancellation) {
             eventuallyRun();
         }
     });
-    return event_stream_1.duplex(input, output);
+    return es.duplex(input, output);
 }
 function debounce(task, duration = 500) {
-    const input = event_stream_1.through();
-    const output = event_stream_1.through();
+    const input = es.through();
+    const output = es.through();
     let state = 'idle';
     const run = () => {
         state = 'running';
         task()
-            .pipe(event_stream_1.through(undefined, () => {
+            .pipe(es.through(undefined, () => {
             const shouldRunAgain = state === 'stale';
             state = 'idle';
             if (shouldRunAgain) {
@@ -98,13 +135,13 @@ function debounce(task, duration = 500) {
             state = 'stale';
         }
     });
-    return event_stream_1.duplex(input, output);
+    return es.duplex(input, output);
 }
 function fixWin32DirectoryPermissions() {
     if (!/win32/.test(process.platform)) {
-        return event_stream_1.through();
+        return es.through();
     }
-    return event_stream_1.mapSync(f => {
+    return es.mapSync(f => {
         if (f.stat && f.stat.isDirectory && f.stat.isDirectory()) {
             f.stat.mode = 16877;
         }
@@ -112,7 +149,7 @@ function fixWin32DirectoryPermissions() {
     });
 }
 function setExecutableBit(pattern) {
-    const setBit = event_stream_1.mapSync(f => {
+    const setBit = es.mapSync(f => {
         if (!f.stat) {
             const stat = { isFile() { return true; }, mode: 0 };
             f.stat = stat;
@@ -123,13 +160,13 @@ function setExecutableBit(pattern) {
     if (!pattern) {
         return setBit;
     }
-    const input = event_stream_1.through();
-    const filter = (0, gulp_filter_1)(pattern, { restore: true });
+    const input = es.through();
+    const filter = (0, gulp_filter_1.default)(pattern, { restore: true });
     const output = input
         .pipe(filter)
         .pipe(setBit)
         .pipe(filter.restore);
-    return event_stream_1.duplex(input, output);
+    return es.duplex(input, output);
 }
 function toFileUri(filePath) {
     const match = filePath.match(/^([a-z])\:(.*)$/i);
@@ -139,27 +176,27 @@ function toFileUri(filePath) {
     return 'file://' + filePath.replace(/\\/g, '/');
 }
 function skipDirectories() {
-    return event_stream_1.mapSync(f => {
+    return es.mapSync(f => {
         if (!f.isDirectory()) {
             return f;
         }
     });
 }
 function cleanNodeModules(rulePath) {
-    const rules = fs.readFileSync(rulePath, 'utf8')
+    const rules = fs_1.default.readFileSync(rulePath, 'utf8')
         .split(/\r?\n/g)
         .map(line => line.trim())
         .filter(line => line && !/^#/.test(line));
     const excludes = rules.filter(line => !/^!/.test(line)).map(line => `!**/node_modules/${line}`);
     const includes = rules.filter(line => /^!/.test(line)).map(line => `**/node_modules/${line.substr(1)}`);
-    const input = event_stream_1.through();
-    const output = event_stream_1.merge(input.pipe((0, gulp_filter_1)(['**', ...excludes])), input.pipe((0, gulp_filter_1)(includes)));
-    return event_stream_1.duplex(input, output);
+    const input = es.through();
+    const output = es.merge(input.pipe((0, gulp_filter_1.default)(['**', ...excludes])), input.pipe((0, gulp_filter_1.default)(includes)));
+    return es.duplex(input, output);
 }
 function loadSourcemaps() {
-    const input = event_stream_1.through();
+    const input = es.through();
     const output = input
-        .pipe(event_stream_1.map((f, cb) => {
+        .pipe(es.map((f, cb) => {
         if (f.sourceMap) {
             cb(undefined, f);
             return;
@@ -187,7 +224,7 @@ function loadSourcemaps() {
             return;
         }
         f.contents = Buffer.from(contents.replace(/\/\/# sourceMappingURL=(.*)$/g, ''), 'utf8');
-        fs.readFile(path.join(path.dirname(f.path), lastMatch[1]), 'utf8', (err, contents) => {
+        fs_1.default.readFile(path_1.default.join(path_1.default.dirname(f.path), lastMatch[1]), 'utf8', (err, contents) => {
             if (err) {
                 return cb(err);
             }
@@ -195,48 +232,48 @@ function loadSourcemaps() {
             cb(undefined, f);
         });
     }));
-    return event_stream_1.duplex(input, output);
+    return es.duplex(input, output);
 }
 function stripSourceMappingURL() {
-    const input = event_stream_1.through();
+    const input = es.through();
     const output = input
-        .pipe(event_stream_1.mapSync(f => {
+        .pipe(es.mapSync(f => {
         const contents = f.contents.toString('utf8');
         f.contents = Buffer.from(contents.replace(/\n\/\/# sourceMappingURL=(.*)$/gm, ''), 'utf8');
         return f;
     }));
-    return event_stream_1.duplex(input, output);
+    return es.duplex(input, output);
 }
 /** Splits items in the stream based on the predicate, sending them to onTrue if true, or onFalse otherwise */
-function $if(test, onTrue, onFalse = event_stream_1.through()) {
+function $if(test, onTrue, onFalse = es.through()) {
     if (typeof test === 'boolean') {
         return test ? onTrue : onFalse;
     }
-    return (0, ternary_stream_1)(test, onTrue, onFalse);
+    return (0, ternary_stream_1.default)(test, onTrue, onFalse);
 }
 /** Operator that appends the js files' original path a sourceURL, so debug locations map */
 function appendOwnPathSourceURL() {
-    const input = event_stream_1.through();
+    const input = es.through();
     const output = input
-        .pipe(event_stream_1.mapSync(f => {
+        .pipe(es.mapSync(f => {
         if (!(f.contents instanceof Buffer)) {
             throw new Error(`contents of ${f.path} are not a buffer`);
         }
         f.contents = Buffer.concat([f.contents, Buffer.from(`\n//# sourceURL=${(0, url_1.pathToFileURL)(f.path)}`)]);
         return f;
     }));
-    return event_stream_1.duplex(input, output);
+    return es.duplex(input, output);
 }
 function rewriteSourceMappingURL(sourceMappingURLBase) {
-    const input = event_stream_1.through();
+    const input = es.through();
     const output = input
-        .pipe(event_stream_1.mapSync(f => {
+        .pipe(es.mapSync(f => {
         const contents = f.contents.toString('utf8');
-        const str = `//# sourceMappingURL=${sourceMappingURLBase}/${path.dirname(f.relative).replace(/\\/g, '/')}/$1`;
+        const str = `//# sourceMappingURL=${sourceMappingURLBase}/${path_1.default.dirname(f.relative).replace(/\\/g, '/')}/$1`;
         f.contents = Buffer.from(contents.replace(/\n\/\/# sourceMappingURL=(.*)$/gm, str));
         return f;
     }));
-    return event_stream_1.duplex(input, output);
+    return es.duplex(input, output);
 }
 function rimraf(dir) {
     const result = () => new Promise((c, e) => {
@@ -254,14 +291,14 @@ function rimraf(dir) {
         };
         retry();
     });
-    result.taskName = `clean-${path.basename(dir).toLowerCase()}`;
+    result.taskName = `clean-${path_1.default.basename(dir).toLowerCase()}`;
     return result;
 }
 function _rreaddir(dirPath, prepend, result) {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const entries = fs_1.default.readdirSync(dirPath, { withFileTypes: true });
     for (const entry of entries) {
         if (entry.isDirectory()) {
-            _rreaddir(path.join(dirPath, entry.name), `${prepend}/${entry.name}`, result);
+            _rreaddir(path_1.default.join(dirPath, entry.name), `${prepend}/${entry.name}`, result);
         }
         else {
             result.push(`${prepend}/${entry.name}`);
@@ -274,20 +311,20 @@ function rreddir(dirPath) {
     return result;
 }
 function ensureDir(dirPath) {
-    if (fs.existsSync(dirPath)) {
+    if (fs_1.default.existsSync(dirPath)) {
         return;
     }
-    ensureDir(path.dirname(dirPath));
-    fs.mkdirSync(dirPath);
+    ensureDir(path_1.default.dirname(dirPath));
+    fs_1.default.mkdirSync(dirPath);
 }
 function rebase(count) {
-    return (0, gulp_rename_1)(f => {
+    return (0, gulp_rename_1.default)(f => {
         const parts = f.dirname ? f.dirname.split(/[\/\\]/) : [];
-        f.dirname = parts.slice(count).join(path.sep);
+        f.dirname = parts.slice(count).join(path_1.default.sep);
     });
 }
 function filter(fn) {
-    const result = event_stream_1.through(function (data) {
+    const result = es.through(function (data) {
         if (fn(data)) {
             this.emit('data', data);
         }
@@ -295,7 +332,7 @@ function filter(fn) {
             result.restore.push(data);
         }
     });
-    result.restore = event_stream_1.through();
+    result.restore = es.through();
     return result;
 }
 function streamToPromise(stream) {
@@ -305,12 +342,30 @@ function streamToPromise(stream) {
     });
 }
 function getElectronVersion() {
-    const npmrc = fs.readFileSync(path.join(root, '.npmrc'), 'utf8');
+    const npmrc = fs_1.default.readFileSync(path_1.default.join(root, '.npmrc'), 'utf8');
     const electronVersion = /^target="(.*)"$/m.exec(npmrc)[1];
     const msBuildId = /^ms_build_id="(.*)"$/m.exec(npmrc)[1];
     return { electronVersion, msBuildId };
 }
 class VinylStat {
+    dev;
+    ino;
+    mode;
+    nlink;
+    uid;
+    gid;
+    rdev;
+    size;
+    blksize;
+    blocks;
+    atimeMs;
+    mtimeMs;
+    ctimeMs;
+    birthtimeMs;
+    atime;
+    mtime;
+    ctime;
+    birthtime;
     constructor(stat) {
         this.dev = stat.dev ?? 0;
         this.ino = stat.ino ?? 0;
@@ -340,3 +395,4 @@ class VinylStat {
     isSocket() { return false; }
 }
 exports.VinylStat = VinylStat;
+//# sourceMappingURL=util.js.map

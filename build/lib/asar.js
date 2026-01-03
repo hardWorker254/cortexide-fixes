@@ -8,8 +8,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createAsar = createAsar;
-const path = require("path");
-const event_stream_1 = require("event-stream");
+const path_1 = __importDefault(require("path"));
+const event_stream_1 = __importDefault(require("event-stream"));
 const pickle = require('chromium-pickle-js');
 const Filesystem = require('asar/lib/filesystem');
 const vinyl_1 = __importDefault(require("vinyl"));
@@ -78,7 +78,7 @@ function createAsar(folderPath, unpackGlobs, skipGlobs, duplicateGlobs, destFile
         // Create a closure capturing `onFileInserted`.
         filesystem.insertFile(relativePath, shouldUnpack, { stat: stat }, {}).then(() => onFileInserted(), () => onFileInserted());
     };
-    return event_stream_1.through(function (file) {
+    return event_stream_1.default.through(function (file) {
         if (file.stat.isDirectory()) {
             return;
         }
@@ -106,10 +106,10 @@ function createAsar(folderPath, unpackGlobs, skipGlobs, duplicateGlobs, destFile
         insertFile(file.relative, { size: file.contents.length, mode: file.stat.mode }, shouldUnpack);
         if (shouldUnpack) {
             // The file goes outside of xx.asar, in a folder xx.asar.unpacked
-            const relative = path.relative(folderPath, file.path);
+            const relative = path_1.default.relative(folderPath, file.path);
             this.queue(new vinyl_1.default({
                 base: '.',
-                path: path.join(destFilename + '.unpacked', relative),
+                path: path_1.default.join(destFilename + '.unpacked', relative),
                 stat: file.stat,
                 contents: file.contents
             }));

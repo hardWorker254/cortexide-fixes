@@ -8,7 +8,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const assert_1 = __importDefault(require("assert"));
-const fs = require("fs");
+const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const booleanPolicy_1 = require("../policies/booleanPolicy");
 const numberPolicy_1 = require("../policies/numberPolicy");
@@ -386,7 +386,7 @@ suite('Policy E2E conversion', () => {
         const parsedPolicies = parsePolicies(policies);
         const result = (0, render_1.renderMacOSPolicy)(mockProduct, parsedPolicies, []);
         // Load the expected fixture file
-        const fixturePath = path.join(__dirname, 'fixtures', 'policies', 'darwin', 'com.visualstudio.code.oss.mobileconfig');
+        const fixturePath = path_1.default.join(__dirname, 'fixtures', 'policies', 'darwin', 'com.visualstudio.code.oss.mobileconfig');
         const expectedContent = await fs_1.promises.readFile(fixturePath, 'utf-8');
         // Compare the rendered profile with the fixture
         assert_1.default.strictEqual(result.profile, expectedContent, 'macOS policy profile should match the fixture');
@@ -395,7 +395,7 @@ suite('Policy E2E conversion', () => {
         const parsedPolicies = parsePolicies(policies);
         const result = (0, render_1.renderMacOSPolicy)(mockProduct, parsedPolicies, []);
         // Load the expected fixture file
-        const fixturePath = path.join(__dirname, 'fixtures', 'policies', 'darwin', 'en-us', 'com.visualstudio.code.oss.plist');
+        const fixturePath = path_1.default.join(__dirname, 'fixtures', 'policies', 'darwin', 'en-us', 'com.visualstudio.code.oss.plist');
         const expectedContent = await fs_1.promises.readFile(fixturePath, 'utf-8');
         // Find the en-us manifest
         const enUsManifest = result.manifests.find(m => m.languageId === 'en-us');
@@ -409,7 +409,7 @@ suite('Policy E2E conversion', () => {
         const parsedPolicies = parsePolicies(policies);
         const result = (0, render_1.renderGP)(mockProduct, parsedPolicies, []);
         // Load the expected fixture file
-        const fixturePath = path.join(__dirname, 'fixtures', 'policies', 'win32', 'CodeOSS.admx');
+        const fixturePath = path_1.default.join(__dirname, 'fixtures', 'policies', 'win32', 'CodeOSS.admx');
         const expectedContent = await fs_1.promises.readFile(fixturePath, 'utf-8');
         // Compare the rendered ADMX with the fixture
         assert_1.default.strictEqual(result.admx, expectedContent, 'Windows ADMX should match the fixture');
@@ -418,7 +418,7 @@ suite('Policy E2E conversion', () => {
         const parsedPolicies = parsePolicies(policies);
         const result = (0, render_1.renderGP)(mockProduct, parsedPolicies, []);
         // Load the expected fixture file
-        const fixturePath = path.join(__dirname, 'fixtures', 'policies', 'win32', 'en-us', 'CodeOSS.adml');
+        const fixturePath = path_1.default.join(__dirname, 'fixtures', 'policies', 'win32', 'en-us', 'CodeOSS.adml');
         const expectedContent = await fs_1.promises.readFile(fixturePath, 'utf-8');
         // Find the en-us ADML
         const enUsAdml = result.adml.find(a => a.languageId === 'en-us');
@@ -430,7 +430,7 @@ suite('Policy E2E conversion', () => {
         const parsedPolicies = parsePolicies(policies);
         const result = (0, render_1.renderMacOSPolicy)(mockProduct, parsedPolicies, frenchTranslations);
         // Load the expected fixture file
-        const fixturePath = path.join(__dirname, 'fixtures', 'policies', 'darwin', 'fr-fr', 'com.visualstudio.code.oss.plist');
+        const fixturePath = path_1.default.join(__dirname, 'fixtures', 'policies', 'darwin', 'fr-fr', 'com.visualstudio.code.oss.plist');
         const expectedContent = await fs_1.promises.readFile(fixturePath, 'utf-8');
         // Find the fr-fr manifest
         const frFrManifest = result.manifests.find(m => m.languageId === 'fr-fr');
@@ -443,7 +443,7 @@ suite('Policy E2E conversion', () => {
         const parsedPolicies = parsePolicies(policies);
         const result = (0, render_1.renderGP)(mockProduct, parsedPolicies, frenchTranslations);
         // Load the expected fixture file
-        const fixturePath = path.join(__dirname, 'fixtures', 'policies', 'win32', 'fr-fr', 'CodeOSS.adml');
+        const fixturePath = path_1.default.join(__dirname, 'fixtures', 'policies', 'win32', 'fr-fr', 'CodeOSS.adml');
         const expectedContent = await fs_1.promises.readFile(fixturePath, 'utf-8');
         // Find the fr-fr ADML
         const frFrAdml = result.adml.find(a => a.languageId === 'fr-fr');
@@ -455,7 +455,7 @@ suite('Policy E2E conversion', () => {
         const parsedPolicies = parsePolicies(policies);
         const result = (0, render_1.renderJsonPolicies)(parsedPolicies);
         // Load the expected fixture file
-        const fixturePath = path.join(__dirname, 'fixtures', 'policies', 'linux', 'policy.json');
+        const fixturePath = path_1.default.join(__dirname, 'fixtures', 'policies', 'linux', 'policy.json');
         const expectedContent = await fs_1.promises.readFile(fixturePath, 'utf-8');
         const expectedJson = JSON.parse(expectedContent);
         // Compare the rendered JSON with the fixture

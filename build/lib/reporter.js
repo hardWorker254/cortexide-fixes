@@ -8,11 +8,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createReporter = createReporter;
-const event_stream_1 = require("event-stream");
+const event_stream_1 = __importDefault(require("event-stream"));
 const fancy_log_1 = __importDefault(require("fancy-log"));
 const ansi_colors_1 = __importDefault(require("ansi-colors"));
-const fs = require("fs");
-const path = require("path");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 class ErrorLog {
     id;
     constructor(id) {
@@ -52,7 +52,7 @@ class ErrorLog {
             .map(([, path, line, column, message]) => ({ path, line: parseInt(line), column: parseInt(column), message }));
         try {
             const logFileName = 'log' + (this.id ? `_${this.id}` : '');
-            fs.writeFileSync(path.join(buildLogFolder, logFileName), JSON.stringify(messages));
+            fs_1.default.writeFileSync(path_1.default.join(buildLogFolder, logFileName), JSON.stringify(messages));
         }
         catch (err) {
             //noop
@@ -68,9 +68,9 @@ function getErrorLog(id = '') {
     }
     return errorLog;
 }
-const buildLogFolder = path.join(path.dirname(path.dirname(__dirname)), '.build');
+const buildLogFolder = path_1.default.join(path_1.default.dirname(path_1.default.dirname(__dirname)), '.build');
 try {
-    fs.mkdirSync(buildLogFolder);
+    fs_1.default.mkdirSync(buildLogFolder);
 }
 catch (err) {
     // ignore
@@ -87,7 +87,7 @@ function createReporter(id) {
     result.end = (emitError) => {
         errors.length = 0;
         errorLog.onStart();
-        return event_stream_1.through(undefined, function () {
+        return event_stream_1.default.through(undefined, function () {
             errorLog.onEnd();
             if (emitError && errors.length > 0) {
                 if (!errors.__logged__) {

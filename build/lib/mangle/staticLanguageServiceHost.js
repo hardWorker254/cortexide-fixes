@@ -9,7 +9,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.StaticLanguageServiceHost = void 0;
 const typescript_1 = __importDefault(require("typescript"));
-const path = require("path");
+const path_1 = __importDefault(require("path"));
 class StaticLanguageServiceHost {
     projectPath;
     _cmdLine;
@@ -21,7 +21,7 @@ class StaticLanguageServiceHost {
         if (parsed.error) {
             throw parsed.error;
         }
-        this._cmdLine = typescript_1.default.parseJsonConfigFileContent(parsed.config, typescript_1.default.sys, path.dirname(projectPath), existingOptions);
+        this._cmdLine = typescript_1.default.parseJsonConfigFileContent(parsed.config, typescript_1.default.sys, path_1.default.dirname(projectPath), existingOptions);
         if (this._cmdLine.errors.length > 0) {
             throw parsed.error;
         }
@@ -51,7 +51,7 @@ class StaticLanguageServiceHost {
         return result;
     }
     getCurrentDirectory() {
-        return path.dirname(this.projectPath);
+        return path_1.default.dirname(this.projectPath);
     }
     getDefaultLibFileName(options) {
         return typescript_1.default.getDefaultLibFilePath(options);

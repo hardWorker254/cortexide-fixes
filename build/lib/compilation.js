@@ -45,17 +45,17 @@ exports.createCompile = createCompile;
 exports.transpileTask = transpileTask;
 exports.compileTask = compileTask;
 exports.watchTask = watchTask;
-const event_stream_1 = require("event-stream");
-const fs = require("fs");
+const event_stream_1 = __importDefault(require("event-stream"));
+const fs_1 = __importDefault(require("fs"));
 const gulp_1 = __importDefault(require("gulp"));
-const path = require("path");
+const path_1 = __importDefault(require("path"));
 const monacodts = __importStar(require("./monaco-api"));
 const nls = __importStar(require("./nls"));
 const reporter_1 = require("./reporter");
 const util = __importStar(require("./util"));
 const fancy_log_1 = __importDefault(require("fancy-log"));
 const ansi_colors_1 = __importDefault(require("ansi-colors"));
-const os = require("os");
+const os_1 = __importDefault(require("os"));
 const vinyl_1 = __importDefault(require("vinyl"));
 const task = __importStar(require("./task"));
 const index_1 = require("./mangle/index");
@@ -64,7 +64,7 @@ const watch = require('./watch');
 // --- gulp-tsb: compile and transpile --------------------------------
 const reporter = (0, reporter_1.createReporter)();
 function getTypeScriptCompilerOptions(src) {
-    const rootDir = path.join(__dirname, `../../${src}`);
+    const rootDir = path_1.default.join(__dirname, `../../${src}`);
     const options = {};
     options.verbose = false;
     options.sourceMap = true;
@@ -74,13 +74,13 @@ function getTypeScriptCompilerOptions(src) {
     options.rootDir = rootDir;
     options.baseUrl = rootDir;
     options.sourceRoot = util.toFileUri(rootDir);
-    options.newLine = /\r\n/.test(fs.readFileSync(__filename, 'utf8')) ? 0 : 1;
+    options.newLine = /\r\n/.test(fs_1.default.readFileSync(__filename, 'utf8')) ? 0 : 1;
     return options;
 }
 function createCompile(src, { build, emitError, transpileOnly, preserveEnglish }) {
     const tsb = require('./tsb');
     const sourcemaps = require('gulp-sourcemaps');
-    const projectPath = path.join(__dirname, '../../', src, 'tsconfig.json');
+    const projectPath = path_1.default.join(__dirname, '../../', src, 'tsconfig.json');
     const overrideOptions = { ...getTypeScriptCompilerOptions(src), inlineSources: Boolean(build) };
     if (!build) {
         overrideOptions.inlineSourceMap = true;
@@ -96,7 +96,7 @@ function createCompile(src, { build, emitError, transpileOnly, preserveEnglish }
         const isUtf8Test = (f) => /(\/|\\)test(\/|\\).*utf8/.test(f.path);
         const isRuntimeJs = (f) => f.path.endsWith('.js') && !f.path.includes('fixtures');
         const noDeclarationsFilter = util.filter(data => !(/\.d\.ts$/.test(data.path)));
-        const input = event_stream_1.through();
+        const input = event_stream_1.default.through();
         const output = input
             .pipe(util.$if(isUtf8Test, bom())) // this is required to preserve BOM in test files that loose it otherwise
             .pipe(util.$if(!build && isRuntimeJs, util.appendOwnPathSourceURL()))
@@ -113,7 +113,7 @@ function createCompile(src, { build, emitError, transpileOnly, preserveEnglish }
         })))
             .pipe(tsFilter.restore)
             .pipe(reporter.end(!!emitError));
-        return event_stream_1.duplex(input, output);
+        return event_stream_1.default.duplex(input, output);
     }
     pipeline.tsProjectSrc = () => {
         return compilation.src({ base: src });
@@ -129,12 +129,12 @@ function transpileTask(src, out, esbuild) {
             .pipe(transpile())
             .pipe(gulp_1.default.dest(out));
     };
-    task.taskName = `transpile-${path.basename(src)}`;
+    task.taskName = `transpile-${path_1.default.basename(src)}`;
     return task;
 }
 function compileTask(src, out, build, options = {}) {
     const task = () => {
-        if (os.totalmem() < 4_000_000_000) {
+        if (os_1.default.totalmem() < 4_000_000_000) {
             throw new Error('compilation requires 4GB of RAM');
         }
         const compile = createCompile(src, { build, emitError: true, transpileOnly: false, preserveEnglish: !!options.preserveEnglish });
@@ -144,11 +144,11 @@ function compileTask(src, out, build, options = {}) {
             generator.execute();
         }
         // mangle: TypeScript to TypeScript
-        let mangleStream = event_stream_1.through();
+        let mangleStream = event_stream_1.default.through();
         if (build && !options.disableMangle) {
             let ts2tsMangler = new index_1.Mangler(compile.projectPath, (...data) => (0, fancy_log_1.default)(ansi_colors_1.default.blue('[mangler]'), ...data), { mangleExports: true, manglePrivateFields: true });
             const newContentsByFileName = ts2tsMangler.computeNewFileContents(new Set(['saveState']));
-            mangleStream = event_stream_1.through(async function write(data) {
+            mangleStream = event_stream_1.default.through(async function write(data) {
                 const tsNormalPath = ts.normalizePath(data.path);
                 const newContents = (await newContentsByFileName).get(tsNormalPath);
                 if (newContents !== undefined) {
@@ -169,7 +169,7 @@ function compileTask(src, out, build, options = {}) {
             .pipe(compile())
             .pipe(gulp_1.default.dest(out));
     };
-    task.taskName = `compile-${path.basename(src)}`;
+    task.taskName = `compile-${path_1.default.basename(src)}`;
     return task;
 }
 function watchTask(out, build, srcPath = 'src') {
@@ -184,10 +184,10 @@ function watchTask(out, build, srcPath = 'src') {
             .pipe(util.incremental(compile, src, true))
             .pipe(gulp_1.default.dest(out));
     };
-    task.taskName = `watch-${path.basename(out)}`;
+    task.taskName = `watch-${path_1.default.basename(out)}`;
     return task;
 }
-const REPO_SRC_FOLDER = path.join(__dirname, '../../src');
+const REPO_SRC_FOLDER = path_1.default.join(__dirname, '../../src');
 class MonacoGenerator {
     _isWatch;
     stream;
@@ -196,7 +196,7 @@ class MonacoGenerator {
     _declarationResolver;
     constructor(isWatch) {
         this._isWatch = isWatch;
-        this.stream = event_stream_1.through();
+        this.stream = event_stream_1.default.through();
         this._watchedFiles = {};
         const onWillReadFile = (moduleId, filePath) => {
             if (!this._isWatch) {
@@ -206,7 +206,7 @@ class MonacoGenerator {
                 return;
             }
             this._watchedFiles[filePath] = true;
-            fs.watchFile(filePath, () => {
+            fs_1.default.watchFile(filePath, () => {
                 this._declarationResolver.invalidateCache(moduleId);
                 this._executeSoon();
             });
@@ -219,7 +219,7 @@ class MonacoGenerator {
         };
         this._declarationResolver = new monacodts.DeclarationResolver(this._fsProvider);
         if (this._isWatch) {
-            fs.watchFile(monacodts.RECIPE_PATH, () => {
+            fs_1.default.watchFile(monacodts.RECIPE_PATH, () => {
                 this._executeSoon();
             });
         }
@@ -256,8 +256,8 @@ class MonacoGenerator {
         if (result.isTheSame) {
             return;
         }
-        fs.writeFileSync(result.filePath, result.content);
-        fs.writeFileSync(path.join(REPO_SRC_FOLDER, 'vs/editor/common/standalone/standaloneEnums.ts'), result.enums);
+        fs_1.default.writeFileSync(result.filePath, result.content);
+        fs_1.default.writeFileSync(path_1.default.join(REPO_SRC_FOLDER, 'vs/editor/common/standalone/standaloneEnums.ts'), result.enums);
         this._log(`monaco.d.ts is changed - total time took ${Date.now() - startTime} ms`);
         if (!this._isWatch) {
             this.stream.emit('error', 'monaco.d.ts is no longer up to date. Please run gulp watch and commit the new file.');
@@ -267,21 +267,21 @@ class MonacoGenerator {
 function generateApiProposalNames() {
     let eol;
     try {
-        const src = fs.readFileSync('src/vs/platform/extensions/common/extensionsApiProposals.ts', 'utf-8');
+        const src = fs_1.default.readFileSync('src/vs/platform/extensions/common/extensionsApiProposals.ts', 'utf-8');
         const match = /\r?\n/m.exec(src);
-        eol = match ? match[0] : os.EOL;
+        eol = match ? match[0] : os_1.default.EOL;
     }
     catch {
-        eol = os.EOL;
+        eol = os_1.default.EOL;
     }
     const pattern = /vscode\.proposed\.([a-zA-Z\d]+)\.d\.ts$/;
     const versionPattern = /^\s*\/\/\s*version\s*:\s*(\d+)\s*$/mi;
     const proposals = new Map();
-    const input = event_stream_1.through();
+    const input = event_stream_1.default.through();
     const output = input
         .pipe(util.filter((f) => pattern.test(f.path)))
-        .pipe(event_stream_1.through((f) => {
-        const name = path.basename(f.path);
+        .pipe(event_stream_1.default.through((f) => {
+        const name = path_1.default.basename(f.path);
         const match = pattern.exec(name);
         if (!match) {
             return;
@@ -320,7 +320,7 @@ function generateApiProposalNames() {
         }));
         this.emit('end');
     }));
-    return event_stream_1.duplex(input, output);
+    return event_stream_1.default.duplex(input, output);
 }
 const apiProposalNamesReporter = (0, reporter_1.createReporter)('api-proposal-names');
 exports.compileApiProposalNamesTask = task.define('compile-api-proposal-names', () => {
