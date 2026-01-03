@@ -155,6 +155,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure Electron sandbox permissions
+        if: ${{ inputs.electron_tests }}
+        run: |
+          set -e
+          ELECTRON_ROOT=.build/electron
+          if [ -f "$ELECTRON_ROOT/chrome-sandbox" ]; then
+            sudo chown root "$ELECTRON_ROOT/chrome-sandbox"
+            sudo chmod 4755 "$ELECTRON_ROOT/chrome-sandbox"
+            stat "$ELECTRON_ROOT/chrome-sandbox"
+          else
+            echo "Warning: chrome-sandbox not found at $ELECTRON_ROOT/chrome-sandbox"
+          fi
+
       - name: 🧪 Run unit tests (Electron)
         if: ${{ inputs.electron_tests }}
         timeout-minutes: 15
