@@ -2051,6 +2051,18 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 					type: 'file'
 				}
 			}
+		} else if (lowerRequest.includes('open')) {
+			// User wants to open a file in the editor
+			const fileMatch = originalRequest.match(/([\w\/\.\-]+\.\w+)/i) ||
+				originalRequest.match(/open\s+([\w\/\.\-]+)/i)
+			if (fileMatch) {
+				return {
+					toolName: 'open_file',
+					toolParams: {
+						uri: fileMatch[1]
+					}
+				}
+			}
 		} else if (lowerRequest.includes('read') || lowerRequest.includes('show') || lowerRequest.includes('view')) {
 			// User wants to read a file
 			const fileMatch = originalRequest.match(/([\w\/\.\-]+\.\w+)/i)
