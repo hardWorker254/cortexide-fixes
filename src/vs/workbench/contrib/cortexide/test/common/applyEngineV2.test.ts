@@ -5,8 +5,6 @@
 
 import { suite, test } from 'mocha';
 import * as assert from 'assert';
-import { URI } from '../../../../../base/common/uri.js';
-import { IApplyEngineV2, FileEditOperation } from '../../common/applyEngineV2.js';
 
 // TODO: Implement full test suite with mocked services
 suite('ApplyEngineV2', () => {

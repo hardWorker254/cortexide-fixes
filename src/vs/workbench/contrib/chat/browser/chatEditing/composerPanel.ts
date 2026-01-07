@@ -50,7 +50,6 @@ import { ITextModelService } from '../../../../../editor/common/services/resolve
 import { diffComposerAudit } from '../../../cortexide/common/diffComposerAudit.js';
 import { IAuditLogService } from '../../../cortexide/common/auditLogService.js';
 import { IRollbackSnapshotService } from '../../../cortexide/common/rollbackSnapshotService.js';
-import { IGitAutoStashService } from '../../../cortexide/common/gitAutoStashService.js';
 import { IApplyEngineV2, FileEditOperation } from '../../../cortexide/common/applyEngineV2.js';
 import { EndOfLinePreference } from '../../../../../editor/common/model.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
