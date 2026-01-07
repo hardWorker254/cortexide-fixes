@@ -707,11 +707,13 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 			this._autocompletionsOfDocument[docUriStr] = new LRUCache<number, Autocompletion>(
 				MAX_CACHE_SIZE,
 				(autocompletion: Autocompletion) => {
-					// Only abort if request is still pending (don't abort finished requests)
+					// Only abort if request is still pending (don't abort finished or accepted requests)
+					// This prevents aborting requests that have already completed successfully or been accepted
 					if (autocompletion.status === 'pending' && autocompletion.requestId) {
 						console.debug(`[Autocomplete] Aborting request ${autocompletion.id} due to cache eviction`)
 						this._llmMessageService.abort(autocompletion.requestId)
 					}
+					// If status is 'finished' or 'error', the request is already done, so no need to abort
 				}
 			)
 		}
@@ -1101,13 +1103,18 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 						console.log('ACCEPT', autocompletion.id)
 						this._lastCompletionAccept = Date.now()
 
-						// Only abort if the request is still pending (not if it's already finished)
+						// Mark as finished before deleting to prevent abort in dispose callback
+						// The dispose callback only aborts if status is 'pending'
+						const wasPending = autocompletion.status === 'pending'
+						autocompletion.status = 'finished'
+						
+						// Only abort if the request was still pending (not if it's already finished)
 						// This prevents aborting requests that have already completed successfully
-						if (autocompletion.status === 'pending' && autocompletion.requestId) {
+						if (wasPending && autocompletion.requestId) {
 							this._llmMessageService.abort(autocompletion.requestId)
 						}
 
-						// Remove from cache (this won't abort if status is 'finished')
+						// Remove from cache (dispose callback will see status='finished' and won't abort)
 						this._autocompletionsOfDocument[docUriStr].delete(autocompletion.id);
 					}
 				});
