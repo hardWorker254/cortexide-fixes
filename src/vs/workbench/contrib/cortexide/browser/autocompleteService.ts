@@ -179,6 +179,31 @@ const TIMEOUT_TIME = 15000; // Reduced from 60s to 15s for autocomplete
 const MAX_CACHE_SIZE = 20;
 const MAX_PENDING_REQUESTS = 2;
 
+// Filter out non-code content from autocomplete results
+// This helps prevent models from outputting explanatory text, comments in other languages, etc.
+const filterNonCodeContent = (text: string): string => {
+	// Remove lines that are mostly non-ASCII characters (likely explanations or non-code)
+	// But keep code that might legitimately contain Unicode (e.g., string literals, comments)
+	const lines = text.split('\n');
+	const filteredLines: string[] = [];
+	
+	for (const line of lines) {
+		// Skip lines that are mostly non-ASCII characters (likely explanations)
+		// But allow if it's clearly code (has operators, brackets, etc.)
+		const nonAsciiRatio = (line.match(/[^\x00-\x7F]/g) || []).length / Math.max(line.length, 1);
+		const hasCodeIndicators = /[{}()\[\];=+\-*\/<>]/.test(line);
+		
+		// If line is mostly non-ASCII and doesn't have code indicators, skip it
+		if (nonAsciiRatio > 0.5 && !hasCodeIndicators) {
+			continue;
+		}
+		
+		filteredLines.push(line);
+	}
+	
+	return filteredLines.join('\n');
+};
+
 // postprocesses the result
 const processStartAndEndSpaces = (result: string) => {
 
@@ -909,7 +934,12 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 					newAutocompletion.endTime = Date.now()
 					newAutocompletion.status = 'finished'
 					const [text, _] = extractCodeFromRegular({ text: fullText, recentlyAddedTextLen: 0 })
-					newAutocompletion.insertText = processStartAndEndSpaces(text)
+					
+					// Filter out suspicious non-code content (e.g., Chinese characters in code completions)
+					// This helps prevent models from outputting explanatory text or non-code content
+					const filteredText = filterNonCodeContent(text)
+					
+					newAutocompletion.insertText = processStartAndEndSpaces(filteredText)
 
 					// handle special case for predicting starting on the next line, add a newline character
 					if (newAutocompletion.type === 'multi-line-start-on-next-line') {
