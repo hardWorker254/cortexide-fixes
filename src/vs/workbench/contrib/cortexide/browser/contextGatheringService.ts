@@ -340,7 +340,7 @@ class ContextGatheringService extends Disposable implements IContextGatheringSer
 		const lineCount = model.getLineCount();
 		const validLineNumber = Math.max(1, Math.min(pos.lineNumber, lineCount));
 		if (validLineNumber < 1 || validLineNumber > lineCount) return null;
-		
+
 		const searchRange = new Range(
 			Math.max(validLineNumber - 1, 1), 1,
 			Math.min(validLineNumber + 1, lineCount),

@@ -146,7 +146,7 @@ export const modelFilterOfFeatureName: {
 			}
 
 			return false
-		}, emptyMessage: { message: 'No models support FIM. Recommended: Mistral codestral (cloud) or Ollama qwen2.5-coder (local). OpenAI\'s official API does not support FIM.', priority: 'always' }
+		}, emptyMessage: { message: 'No models support FIM. Cloud options: Mistral codestral-latest (requires Mistral API key). Local options: Ollama qwen2.5-coder. Note: OpenAI\'s official API does not support FIM, but you can use OpenAI models via OpenRouter if the backend supports FIM.', priority: 'always' }
 	},
 	'Chat': {
 		filter: o => {

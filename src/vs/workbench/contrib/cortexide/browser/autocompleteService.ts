@@ -186,21 +186,21 @@ const filterNonCodeContent = (text: string): string => {
 	// But keep code that might legitimately contain Unicode (e.g., string literals, comments)
 	const lines = text.split('\n');
 	const filteredLines: string[] = [];
-	
+
 	for (const line of lines) {
 		// Skip lines that are mostly non-ASCII characters (likely explanations)
 		// But allow if it's clearly code (has operators, brackets, etc.)
 		const nonAsciiRatio = (line.match(/[^\x00-\x7F]/g) || []).length / Math.max(line.length, 1);
 		const hasCodeIndicators = /[{}()\[\];=+\-*\/<>]/.test(line);
-		
+
 		// If line is mostly non-ASCII and doesn't have code indicators, skip it
 		if (nonAsciiRatio > 0.5 && !hasCodeIndicators) {
 			continue;
 		}
-		
+
 		filteredLines.push(line);
 	}
-	
+
 	return filteredLines.join('\n');
 };
 
@@ -842,7 +842,7 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 			// Only show notification once per session to avoid spam
 			if (!this._hasShownNoModelWarning) {
 				this._hasShownNoModelWarning = true
-				this._notificationService.warn('Autocomplete requires a model with FIM (Fill-In-the-Middle) support. Please select a model in CortexIDE Settings > Feature Options > Autocomplete. Recommended: qwen2.5-coder models (Ollama) or codestral (Mistral).')
+				this._notificationService.warn('Autocomplete requires a model with FIM (Fill-In-the-Middle) support. Please select a model in CortexIDE Settings > Feature Options > Autocomplete. Cloud options: Mistral codestral-latest. Local options: Ollama qwen2.5-coder.')
 			}
 			return []
 		}
@@ -934,11 +934,11 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 					newAutocompletion.endTime = Date.now()
 					newAutocompletion.status = 'finished'
 					const [text, _] = extractCodeFromRegular({ text: fullText, recentlyAddedTextLen: 0 })
-					
+
 					// Filter out suspicious non-code content (e.g., Chinese characters in code completions)
 					// This helps prevent models from outputting explanatory text or non-code content
 					const filteredText = filterNonCodeContent(text)
-					
+
 					newAutocompletion.insertText = processStartAndEndSpaces(filteredText)
 
 					// handle special case for predicting starting on the next line, add a newline character
