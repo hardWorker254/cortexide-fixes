@@ -1111,6 +1111,9 @@ export class ToolsService implements IToolsService {
 					stringifyLintErrors(result.lintErrors)
 					: 'No lint errors found.'
 			},
+			open_file: (params, _result) => {
+				return `File ${params.uri.fsPath} opened in editor.`
+			},
 			// ---
 			create_file_or_folder: (params, result) => {
 				return `URI ${params.uri.fsPath} successfully created.`
