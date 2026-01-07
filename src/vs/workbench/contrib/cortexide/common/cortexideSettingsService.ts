@@ -80,6 +80,12 @@ export interface ICortexideSettingsService {
 	addMCPUserStateOfNames(userStateOfName: MCPUserStateOfName): Promise<void>;
 	removeMCPUserStateOfNames(serverNames: string[]): Promise<void>;
 	setMCPServerState(serverName: string, state: MCPUserState): Promise<void>;
+
+	/**
+	 * Resolve "auto" model selection to a real model, or return null if no models are available
+	 * This is a shared utility used across all features for consistent auto selection handling
+	 */
+	resolveAutoModelSelection(modelSelection: ModelSelection | null | undefined): ModelSelection | null;
 }
 
 
@@ -664,6 +670,37 @@ class VoidSettingsService extends Disposable implements ICortexideSettingsServic
 		}
 		await this._setMCPUserStateOfName(newMCPServerStates)
 		this._metricsService.capture('Update MCP Server State', { serverName, state });
+	}
+
+	/**
+	 * Resolve "auto" model selection to a real model, or return null if no models are available
+	 * This is a shared utility used across all features for consistent auto selection handling
+	 */
+	resolveAutoModelSelection(modelSelection: ModelSelection | null | undefined): ModelSelection | null {
+		// If selection is null/undefined or not "auto", return as-is
+		if (!modelSelection || !(modelSelection.providerName === 'auto' && modelSelection.modelName === 'auto')) {
+			return modelSelection || null
+		}
+
+		// Try to find the first available configured model (prefer online models first, then local)
+		const providerNames: ProviderName[] = ['anthropic', 'openAI', 'gemini', 'xAI', 'mistral', 'deepseek', 'groq', 'ollama', 'vLLM', 'lmStudio', 'openAICompatible', 'openRouter', 'liteLLM']
+
+		for (const providerName of providerNames) {
+			const providerSettings = this.state.settingsOfProvider[providerName]
+			if (providerSettings && providerSettings._didFillInProviderSettings) {
+				const models = providerSettings.models || []
+				const firstModel = models.find(m => !m.isHidden)
+				if (firstModel) {
+					return {
+						providerName,
+						modelName: firstModel.modelName,
+					}
+				}
+			}
+		}
+
+		// No models available
+		return null
 	}
 
 }

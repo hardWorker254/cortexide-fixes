@@ -68,7 +68,7 @@ export const sendLLMMessage = async ({
 	const onFinalMessage: OnFinalMessage = (params) => {
 		const { fullText, fullReasoning, toolCall } = params
 		if (_didAbort) return
-		captureLLMEvent(`${loggingName} - Received Full Message`, { messageLength: fullText.length, reasoningLength: fullReasoning?.length, duration: new Date().getMilliseconds() - submit_time.getMilliseconds(), toolCallName: toolCall?.name })
+		captureLLMEvent(`${loggingName} - Received Full Message`, { messageLength: fullText.length, reasoningLength: fullReasoning?.length, duration: Date.now() - submit_time.getTime(), toolCallName: toolCall?.name })
 		onFinalMessage_(params)
 	}
 
@@ -109,7 +109,7 @@ export const sendLLMMessage = async ({
 	try {
 		// Skip "auto" - it's not a real provider
 		if (providerName === 'auto') {
-			onError({ message: `Error: Cannot use "auto" provider - must resolve to a real model first.`, fullError: null })
+			onError({ message: `Error: Cannot use "auto" provider - must resolve to a real model first. This usually means auto model selection failed. Please check your model provider settings or select a specific model.`, fullError: null })
 			return
 		}
 		const implementation = sendLLMMessageToProviderImplementation[providerName]

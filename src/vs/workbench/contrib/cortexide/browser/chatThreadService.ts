@@ -794,28 +794,7 @@ class ChatThreadService extends Disposable implements IChatThreadService {
 	 * Get a fallback model when auto selection fails
 	 * Returns the first available configured model, or null if none are available
 	 */
-	private _getFallbackModel(): ModelSelection | null {
-		const settingsState = this._settingsService.state;
-
-		// Try to find any configured model (prefer online models first, then local)
-		const providerNames: ProviderName[] = ['anthropic', 'openAI', 'gemini', 'xAI', 'mistral', 'deepseek', 'groq', 'ollama', 'vLLM', 'lmStudio', 'openAICompatible', 'openRouter', 'liteLLM'];
-
-		for (const providerName of providerNames) {
-			const providerSettings = settingsState.settingsOfProvider[providerName];
-			if (providerSettings && providerSettings._didFillInProviderSettings) {
-				// Find first non-hidden model
-				const firstModel = providerSettings.models.find(m => !m.isHidden);
-				if (firstModel) {
-					return {
-						providerName,
-						modelName: firstModel.modelName,
-					};
-				}
-			}
-		}
-
-		return null;
-	}
+	// Note: _getFallbackModel removed - use _settingsService.resolveAutoModelSelection() instead
 
 	/**
 	 * Check if a model supports vision/image inputs
@@ -1906,6 +1885,72 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 
 	// returns true when the tool call is waiting for user approval
 	/**
+	 * Parses JSON tool call format from text response.
+	 * Some models output tool calls as JSON text instead of using native tool calling.
+	 * Example: {"name": "delete_file_or_folder", "arguments": {"uri": "/path", "is_recursive": true}}
+	 */
+	private _parseJSONToolCallFromText(text: string): { toolName: ToolName, toolParams: RawToolParamsObj } | null {
+		try {
+			// Try to find JSON object in text (may be wrapped in markdown code blocks or plain text)
+			let jsonStr = text.trim()
+
+			// Remove markdown code blocks if present
+			const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
+			if (codeBlockMatch) {
+				jsonStr = codeBlockMatch[1].trim()
+			}
+
+			// Try to find JSON object pattern - be more flexible with whitespace
+			// Look for opening brace, then try to find matching closing brace
+			const openBraceIdx = jsonStr.indexOf('{')
+			if (openBraceIdx === -1) {
+				return null
+			}
+
+			// Find matching closing brace
+			let braceCount = 0
+			let closeBraceIdx = -1
+			for (let i = openBraceIdx; i < jsonStr.length; i++) {
+				if (jsonStr[i] === '{') braceCount++
+				if (jsonStr[i] === '}') {
+					braceCount--
+					if (braceCount === 0) {
+						closeBraceIdx = i
+						break
+					}
+				}
+			}
+
+			if (closeBraceIdx === -1) {
+				return null
+			}
+
+			const jsonSubstring = jsonStr.substring(openBraceIdx, closeBraceIdx + 1)
+			const parsed = JSON.parse(jsonSubstring)
+
+			// Check if it's a tool call format
+			if (typeof parsed === 'object' && parsed !== null && 'name' in parsed) {
+				const toolName = parsed.name
+				const toolParams = parsed.arguments || parsed.params || {}
+
+				// Validate tool name is a valid ToolName
+				// Note: We'll validate this when we try to use it
+				if (typeof toolName === 'string' && typeof toolParams === 'object' && toolParams !== null) {
+					return {
+						toolName: toolName as ToolName,
+						toolParams: toolParams as RawToolParamsObj
+					}
+				}
+			}
+		} catch (error) {
+			// Not valid JSON or not a tool call format
+			return null
+		}
+
+		return null
+	}
+
+	/**
 	 * Synthesizes a tool call from user intent when the model refuses to use tools.
 	 * This ensures Agent Mode works even with models that don't follow tool calling instructions.
 	 */
@@ -2019,8 +2064,43 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 					}
 				}
 			}
+		} else if (lowerRequest.includes('add') && (lowerRequest.includes('comment') || lowerRequest.includes('note') || lowerRequest.includes('todo'))) {
+			// User wants to add a comment - need to find the file first
+			// Extract file name from request (e.g., "add comment to test.js" -> "test.js")
+			const fileMatch = originalRequest.match(/(?:to|in|on|at)\s+([\w\/\.\-]+\.\w+)/i) ||
+				originalRequest.match(/([\w\/\.\-]+\.\w+)/i)
+			if (fileMatch) {
+				return {
+					toolName: 'read_file',
+					toolParams: {
+						uri: fileMatch[1],
+						start_line: '1',
+						end_line: '100'
+					}
+				}
+			}
+			// If no file specified, search for likely files
+			const keywords = extractKeywords(originalRequest).filter(k => !['comment', 'note', 'todo', 'add'].includes(k.toLowerCase()))
+			return {
+				toolName: 'search_for_files',
+				toolParams: {
+					query: keywords.length > 0 ? keywords.join(' ') : 'file'
+				}
+			}
 		} else if (lowerRequest.includes('edit') || lowerRequest.includes('modify') || lowerRequest.includes('change') || lowerRequest.includes('update')) {
 			// User wants to edit a file - first need to find/read it
+			const fileMatch = originalRequest.match(/(?:to|in|on|at)\s+([\w\/\.\-]+\.\w+)/i) ||
+				originalRequest.match(/([\w\/\.\-]+\.\w+)/i)
+			if (fileMatch) {
+				return {
+					toolName: 'read_file',
+					toolParams: {
+						uri: fileMatch[1],
+						start_line: '1',
+						end_line: '100'
+					}
+				}
+			}
 			const keywords = extractKeywords(originalRequest)
 			return {
 				toolName: 'search_for_files',
@@ -2261,7 +2341,13 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 				// Check YOLO mode for NL shell commands
 				const isNLCommand = isBuiltInTool && toolName === 'run_nl_command';
 
+				// Check if auto-approve is explicitly enabled for this approval type
+				// Default to true for 'edits' if not explicitly set (backward compatible)
 				let shouldAutoApprove = this._settingsService.state.globalSettings.autoApprove[approvalType];
+				// If autoApprove is undefined for 'edits', default to true (basic operations should work by default)
+				if (approvalType === 'edits' && shouldAutoApprove === undefined) {
+					shouldAutoApprove = true;
+				}
 				let riskScore: { riskScore: number; confidenceScore: number; riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; riskFactors: string[]; confidenceFactors: string[] } | undefined;
 
 				// If YOLO mode is enabled and this is an NL command, check if it's safe
@@ -2291,43 +2377,51 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 					}
 				}
 
-				// If YOLO mode is enabled and this is an edit operation, score the risk
-				if (isEditOperation && this._settingsService.state.globalSettings.enableYOLOMode) {
+				// If this is an edit operation, score the risk (for both YOLO mode and to respect autoApprove safely)
+				if (isEditOperation) {
 					try {
 						const editContext = await this._buildEditContext(toolName, toolParams, threadId);
 						riskScore = await this._editRiskScoringService.scoreEdit(editContext);
 
-						const yoloRiskThreshold = this._settingsService.state.globalSettings.yoloRiskThreshold ?? 0.2;
-						const yoloConfidenceThreshold = this._settingsService.state.globalSettings.yoloConfidenceThreshold ?? 0.7;
-
-						// Auto-approve if risk is low and confidence is high
-						if (riskScore.riskScore < yoloRiskThreshold && riskScore.confidenceScore > yoloConfidenceThreshold) {
-							shouldAutoApprove = true;
-							// Track YOLO auto-approval metric
-							this._metricsService.capture('yolo_auto_approved', {
-								riskScore: riskScore.riskScore,
-								confidenceScore: riskScore.confidenceScore,
-								riskLevel: riskScore.riskLevel,
-								operation: toolName,
-							});
-
-							// Show non-intrusive notification for medium-risk auto-applies (not very low risk)
-							// Very low risk (< 0.1) edits are silent to avoid notification fatigue
-							if (riskScore.riskScore >= 0.1) {
-								this._showAutoApplyNotification(editContext, riskScore, toolName);
-							}
-						} else if (riskScore.riskLevel === 'HIGH') {
+						// If autoApprove is enabled, respect it for LOW and MEDIUM risk operations
+						// Only block HIGH risk operations even when autoApprove is true (safety)
+						if (shouldAutoApprove && riskScore.riskLevel === 'HIGH') {
 							// High-risk edits always require approval, even if autoApprove is true
 							shouldAutoApprove = false;
 							// Track high-risk blocked metric
-							this._metricsService.capture('yolo_high_risk_blocked', {
+							this._metricsService.capture('high_risk_blocked_despite_autoapprove', {
 								riskScore: riskScore.riskScore,
 								confidenceScore: riskScore.confidenceScore,
 								operation: toolName,
 							});
 						}
+
+						// If YOLO mode is enabled, use risk thresholds for additional auto-approval
+						if (this._settingsService.state.globalSettings.enableYOLOMode) {
+							const yoloRiskThreshold = this._settingsService.state.globalSettings.yoloRiskThreshold ?? 0.2;
+							const yoloConfidenceThreshold = this._settingsService.state.globalSettings.yoloConfidenceThreshold ?? 0.7;
+
+							// Auto-approve if risk is low and confidence is high (even if autoApprove wasn't explicitly set)
+							if (riskScore.riskScore < yoloRiskThreshold && riskScore.confidenceScore > yoloConfidenceThreshold) {
+								shouldAutoApprove = true;
+								// Track YOLO auto-approval metric
+								this._metricsService.capture('yolo_auto_approved', {
+									riskScore: riskScore.riskScore,
+									confidenceScore: riskScore.confidenceScore,
+									riskLevel: riskScore.riskLevel,
+									operation: toolName,
+								});
+
+								// Show non-intrusive notification for medium-risk auto-applies (not very low risk)
+								// Very low risk (< 0.1) edits are silent to avoid notification fatigue
+								if (riskScore.riskScore >= 0.1) {
+									this._showAutoApplyNotification(editContext, riskScore, toolName);
+								}
+							}
+						}
 					} catch (error) {
 						// If risk scoring fails, fall back to normal approval flow
+						// If autoApprove was already true, keep it true (don't block due to scoring failure)
 						console.debug('[ChatThreadService] Risk scoring failed, using normal approval:', error);
 					}
 				}
@@ -2558,6 +2652,26 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 		repoIndexerPromise?: Promise<{ results: string[], metrics: any } | null>,
 	}) {
 
+		// CRITICAL: Validate and resolve model selection BEFORE starting the loop
+		// This prevents wasted API calls and ensures we have a valid model
+		let resolvedModelSelection = modelSelection
+		let resolvedModelSelectionOptions = modelSelectionOptions
+
+		// Resolve "auto" model selection using shared utility
+		const resolved = this._settingsService.resolveAutoModelSelection(resolvedModelSelection)
+		if (!resolved) {
+			// No models available
+			this._notificationService.error('No models available. Please configure at least one model provider in settings.')
+			this._setStreamState(threadId, { isRunning: 'idle', interrupt: 'not_needed' })
+			return
+		}
+		resolvedModelSelection = resolved
+
+		// Recompute modelSelectionOptions for the resolved model
+		// Type assertion is safe because we've already resolved "auto" above
+		const resolvedProviderName = resolvedModelSelection.providerName as Exclude<typeof resolvedModelSelection.providerName, 'auto'>
+		resolvedModelSelectionOptions = this._settingsService.state.optionsOfModelSelection['Chat']?.[resolvedProviderName]?.[resolvedModelSelection.modelName]
+
 		// CRITICAL: Create a flag to stop execution immediately when plan is generated
 		// NOTE: This flag is reset when plan is approved/executing to allow execution to proceed
 		let planWasGenerated = false
@@ -2743,6 +2857,8 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 
 		// Flag to prevent further tool calls after file read limit is exceeded
 		let fileReadLimitExceeded = false
+		// Track tools executed in this request to detect incomplete workflows
+		let toolsExecutedInRequest: string[] = []
 
 		// tool use loop
 		while (shouldSendAnotherMessage) {
@@ -2803,7 +2919,7 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 					const preprocessed = await preprocessImagesForQA(
 						originalUserMessage.images,
 						originalUserMessage.displayContent || '',
-						modelSelection,
+						resolvedModelSelection,
 						settings.imageQADevMode,
 						{
 							allowRemoteModels: settings.imageQAAllowRemoteModels,
@@ -2851,23 +2967,10 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 				return
 			}
 
-			// CRITICAL: Validate modelSelection before preparing messages
-			// This prevents "invalid message format" errors from empty messages
-			// If auto selection failed and returned unresolved 'auto', try fallback
-			if (!modelSelection || (modelSelection.providerName === 'auto' && modelSelection.modelName === 'auto')) {
-				// Try to get fallback model instead of erroring
-				const fallbackModel = this._getFallbackModel()
-				if (fallbackModel) {
-					modelSelection = fallbackModel
-					// Only log to console to avoid notification spam - fallback should work transparently
-					console.debug('[ChatThreadService] Auto model selection failed, using fallback model:', fallbackModel)
-				} else {
-					// Last resort: no models available
-					this._notificationService.error('No models available. Please configure at least one model provider in settings.')
-					this._setStreamState(threadId, { isRunning: 'idle', interrupt: 'not_needed' })
-					return
-				}
-			}
+			// Use resolved model selection (already validated before loop)
+			// Use let so we can update it in retry logic
+			let modelSelection = resolvedModelSelection
+			let modelSelectionOptions = resolvedModelSelectionOptions
 
 			// Start latency audit tracking (reuse earlyRequestId if provided for router tracking, otherwise generate new)
 			const finalRequestId = earlyRequestId || generateUuid()
@@ -3342,7 +3445,8 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 						let nextModel: ModelSelection | null = null
 						if (originalRoutingDecision?.fallbackChain && originalRoutingDecision.fallbackChain.length > 0) {
 							// Find first model in fallback chain that we haven't tried
-							for (const fallbackModel of originalRoutingDecision.fallbackChain) {
+							const fallbackChain: ModelSelection[] = originalRoutingDecision.fallbackChain
+							for (const fallbackModel of fallbackChain) {
 								const modelKey = `${fallbackModel.providerName}/${fallbackModel.modelName}`
 								if (!triedModels.has(modelKey)) {
 									nextModel = fallbackModel
@@ -3420,6 +3524,11 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 							} else {
 								console.log(`[ChatThreadService] Auto mode: Model ${modelSelection?.providerName}/${modelSelection?.modelName} failed, trying fallback: ${nextModel.providerName}/${nextModel.modelName}`)
 								modelSelection = nextModel
+								// Update resolvedModelSelection and options for next iteration
+								resolvedModelSelection = nextModel
+								// Type assertion is safe because nextModel is not "auto" (it came from fallback chain)
+								const nextProviderName = nextModel.providerName as Exclude<typeof nextModel.providerName, 'auto'>
+								resolvedModelSelectionOptions = this._settingsService.state.optionsOfModelSelection['Chat']?.[nextProviderName]?.[nextModel.modelName]
 								// Update request ID for new model
 								const newRequestId = generateUuid()
 								chatLatencyAudit.startRequest(newRequestId, nextModel.providerName, nextModel.modelName)
@@ -3491,7 +3600,52 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 				}
 
 				// llm res success
-				const { toolCall, info } = llmRes
+				let { toolCall, info } = llmRes
+
+				// CRITICAL: Check if model output JSON tool call format as text
+				// Some models output tool calls as JSON text instead of using native tool calling
+				// Parse it and convert to proper tool call format
+				if (!toolCall && info.fullText.trim()) {
+					const parsedToolCall = this._parseJSONToolCallFromText(info.fullText)
+					if (parsedToolCall) {
+						// Found JSON tool call in text - convert to proper format
+						const toolId = generateUuid()
+						toolCall = {
+							name: parsedToolCall.toolName,
+							rawParams: parsedToolCall.toolParams,
+							id: toolId,
+							isDone: true,
+							doneParams: Object.keys(parsedToolCall.toolParams)
+						}
+						// Remove the JSON from text since we're executing it as a tool call
+						// Try to remove just the JSON part, keep any surrounding text
+						const openBraceIdx = info.fullText.indexOf('{')
+						if (openBraceIdx !== -1) {
+							// Find matching closing brace
+							let braceCount = 0
+							let closeBraceIdx = -1
+							for (let i = openBraceIdx; i < info.fullText.length; i++) {
+								if (info.fullText[i] === '{') braceCount++
+								if (info.fullText[i] === '}') {
+									braceCount--
+									if (braceCount === 0) {
+										closeBraceIdx = i
+										break
+									}
+								}
+							}
+
+							if (closeBraceIdx !== -1) {
+								const beforeJson = info.fullText.substring(0, openBraceIdx).trim()
+								const afterJson = info.fullText.substring(closeBraceIdx + 1).trim()
+								info = {
+									...info,
+									fullText: [beforeJson, afterJson].filter(s => s.length > 0).join('\n\n').trim() || ''
+								}
+							}
+						}
+					}
+				}
 
 				// Track if we synthesized a tool and added a message (to prevent duplicate messages)
 				let toolSynthesizedAndMessageAdded = false
@@ -3510,6 +3664,26 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 					// BUT: If we've already synthesized tools once and model didn't use them, don't try again
 					// This prevents infinite loops when models have specialToolFormat set but don't actually support tools
 					modelSupportsTools = !!capabilities.specialToolFormat && !hasSynthesizedForRequest
+				}
+
+				// Check if we're in normal mode and user is trying to do something that requires tools
+				if (chatMode === 'normal' && !toolCall && info.fullText.trim() && originalUserMessage) {
+					const userRequest = originalUserMessage.displayContent?.toLowerCase() || ''
+					const actionWords = ['add', 'create', 'edit', 'delete', 'remove', 'update', 'modify', 'change', 'make', 'write', 'build', 'implement', 'fix', 'run', 'execute']
+					const isActionRequest = actionWords.some(word => userRequest.includes(word))
+
+					if (isActionRequest) {
+						// User is trying to do something that requires tools, but we're in normal mode
+						this._addMessageToThread(threadId, {
+							role: 'assistant',
+							displayContent: `I understand you want to ${originalUserMessage.displayContent}, but I'm currently in **Normal** mode which doesn't allow file operations.\n\nTo perform file edits, create files, or run commands, please switch to **Agent** mode using the dropdown in the chat interface.\n\n**Normal mode**: Chat only, no file operations\n**Gather mode**: Can read files, but can't edit\n**Agent mode**: Full access to edit files, create files, and run commands`,
+							reasoning: '',
+							anthropicReasoning: null
+						})
+						this._setStreamState(threadId, { isRunning: 'idle', interrupt: 'not_needed' })
+						this._addUserCheckpoint({ threadId })
+						return
+					}
 				}
 
 				// Detect if Agent Mode should have used tools but didn't
@@ -3650,14 +3824,109 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 				// This prevents the UI from continuing to show streaming state after completion
 				this._setStreamState(threadId, { isRunning: 'idle', interrupt: 'not_needed' })
 
-				// CRITICAL: If we've synthesized tools and model responded without tools, stop the loop
-				// This prevents infinite loops when models don't support tools
-				// The model has given its final answer, no need to continue
+				// CRITICAL: Check if model responded with text but no tool call after executing tools
+				// This can happen when model explores codebase but doesn't continue to answer the question
+				// For "how many endpoints" type questions, we need to ensure model searches for endpoints
+				if (!toolCall && info.fullText.trim() && toolsExecutedInRequest.length > 0 && originalUserMessage) {
+					const userRequest = originalUserMessage.displayContent?.toLowerCase() || ''
+
+					// Check if this is a "how many" question that requires searching files
+					// Expanded pattern matching for better detection
+					const isHowManyQuestion = userRequest.includes('how many') && (
+						userRequest.includes('endpoint') || userRequest.includes('api') || userRequest.includes('route') ||
+						userRequest.includes('file') || userRequest.includes('function') || userRequest.includes('class') ||
+						userRequest.includes('method') || userRequest.includes('component') || userRequest.includes('module') ||
+						userRequest.includes('service') || userRequest.includes('controller') || userRequest.includes('handler')
+					)
+
+					// Check if we've searched or read files (needed to determine if more search is needed)
+					const hasSearched = toolsExecutedInRequest.includes('search_for_files') || toolsExecutedInRequest.includes('search_pathnames_only')
+					const hasRead = toolsExecutedInRequest.includes('read_file')
+
+					// Check if model's response actually contains an answer (has numbers or count indicators)
+					const responseText = info.fullText.toLowerCase()
+					const hasCountInResponse = /\d+/.test(responseText) && (
+						responseText.includes('endpoint') || responseText.includes('api') || responseText.includes('route') ||
+						responseText.includes('file') || responseText.includes('function') || responseText.includes('class') ||
+						responseText.includes('there are') || responseText.includes('i found') || responseText.includes('total')
+					)
+
+					// If it's a "how many" question and we haven't searched/read, and response doesn't contain answer, synthesize search
+					const needsMoreSearch = isHowManyQuestion && !hasSearched && !hasRead && !hasCountInResponse && !hasSynthesizedForRequest && filesReadInQuery < MAX_FILES_READ_PER_QUERY
+
+					if (needsMoreSearch) {
+						const synthesizedToolCall = this._synthesizeToolCallFromIntent(userRequest, originalUserMessage.displayContent || '')
+						if (synthesizedToolCall && synthesizedToolCall.toolName === 'search_for_files') {
+							const { toolName, toolParams } = synthesizedToolCall
+							const toolId = generateUuid()
+
+							// Add assistant message explaining we're continuing the search
+							this._addMessageToThread(threadId, {
+								role: 'assistant',
+								displayContent: `I'll search for files to answer your question.`,
+								reasoning: '',
+								anthropicReasoning: null
+							})
+
+							// Execute the synthesized tool
+							const mcpTools = this._mcpService.getMCPTools()
+							const mcpTool = mcpTools?.find(t => t.name === toolName as ToolName)
+							const { awaitingUserApproval, interrupted } = await this._runToolCall(
+								threadId,
+								toolName as ToolName,
+								toolId,
+								mcpTool?.mcpServerName,
+								{ preapproved: false, unvalidatedToolParams: toolParams }
+							)
+
+							if (interrupted) {
+								this._setStreamState(threadId, undefined)
+								return
+							}
+
+							(toolsExecutedInRequest as string[]).push(toolName)
+							hasSynthesizedToolsInThisRequest = true
+
+							if (awaitingUserApproval) {
+								isRunningWhenEnd = 'awaiting_user'
+							} else {
+								shouldSendAnotherMessage = true
+							}
+
+							this._setStreamState(threadId, { isRunning: 'idle', interrupt: 'not_needed' })
+							continue // Continue loop with the new tool result
+						}
+					}
+				}
+
+				// CRITICAL: Only stop loop if tools were synthesized AND model explicitly indicates task is complete
+				// Don't stop just because tools were synthesized - model might need another iteration
+				// Only stop if model's response clearly indicates completion AND no more tools needed
 				if (hasSynthesizedToolsInThisRequest && !toolCall && info.fullText.trim()) {
-					// Model doesn't support tools or chose not to use them - stop here
-					// Set to undefined to properly clear the state and hide the stop button
-					this._setStreamState(threadId, { isRunning: undefined })
-					return
+					// Check if model's response indicates the task is actually complete
+					const responseText = info.fullText.toLowerCase()
+					const indicatesCompletion =
+						responseText.includes('i cannot') ||
+						responseText.includes('i don\'t have') ||
+						responseText.includes('i\'m unable') ||
+						responseText.includes('i need more information') ||
+						responseText.includes('please provide') ||
+						// If we've executed multiple tools and model gives a clear answer, it's likely complete
+						(toolsExecutedInRequest.length >= 3 && (
+							responseText.includes('here') ||
+							responseText.includes('found') ||
+							responseText.includes('result') ||
+							responseText.includes('answer')
+						))
+
+					// Only stop if model explicitly indicates completion or we've done substantial work
+					// Don't stop if model just responded with text after first tool synthesis
+					if (indicatesCompletion || (toolsExecutedInRequest.length >= 3 && !originalUserMessage?.displayContent?.toLowerCase().includes('how many'))) {
+						// Model has given its final answer - stop here
+						this._setStreamState(threadId, { isRunning: undefined })
+						return
+					}
+					// Otherwise, continue loop to give model another chance to use tools or complete the task
 				}
 
 				// call tool if there is one
@@ -3671,14 +3940,14 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 
 					// CRITICAL: Prevent excessive file reads that can cause infinite loops
 					// For codebase queries, limit the number of files read
+					// Check limit BEFORE incrementing to ensure we don't exceed it
 					if (toolCall.name === 'read_file') {
-						filesReadInQuery++
-						if (filesReadInQuery > MAX_FILES_READ_PER_QUERY) {
+						if (filesReadInQuery >= MAX_FILES_READ_PER_QUERY) {
 							// Too many files read - likely stuck in a loop
 							// Add a message explaining the limit, then make one final LLM call to generate an answer
 							this._addMessageToThread(threadId, {
 								role: 'assistant',
-								displayContent: `I've read ${filesReadInQuery} files, which exceeds the limit. I'll provide an answer based on what I've gathered so far.`,
+								displayContent: `I've read ${filesReadInQuery} files, which is the limit. I'll provide an answer based on what I've gathered so far.`,
 								reasoning: '',
 								anthropicReasoning: null
 							})
@@ -3696,6 +3965,8 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 							// Skip tool execution and continue to next LLM call
 							continue
 						}
+						// Only increment if we're actually going to read the file
+						filesReadInQuery++
 					}
 
 					// CRITICAL: Check for pending plan before executing tool (fast check)
@@ -3721,6 +3992,11 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 						}
 						return
 					}
+
+					// Track that this tool was executed (even if it failed - we still tried)
+					// Tool errors are handled by _runToolCall which adds error messages to the thread
+					// The loop will continue so the model can process the error
+					toolsExecutedInRequest.push(toolCall.name)
 
 					// Only update plan step status if we have an active plan (skip if no plan)
 					if (activePlanTracking?.currentStep) {
@@ -4439,8 +4715,8 @@ We only need to do it for files that were edited since `from`, ie files between 
 			// CRITICAL: If auto selection failed, we need a fallback to prevent null modelSelection
 			// This ensures we never send empty messages to the API (which causes "invalid message format" error)
 			if (!modelSelection) {
-				// Try to get any available model as fallback
-				const fallbackModel = this._getFallbackModel()
+				// Try to get any available model as fallback using shared utility
+				const fallbackModel = this._settingsService.resolveAutoModelSelection(null)
 				if (fallbackModel) {
 					modelSelection = fallbackModel
 					this._notificationService.warn('Auto model selection failed. Using fallback model. Please configure your model providers.')

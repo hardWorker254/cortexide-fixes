@@ -179,11 +179,26 @@ class EditRiskScoringService extends Disposable implements IEditRiskScoringServi
 			// Model not available, skip this check
 		}
 
-		// 7. Empty file creation (low risk)
+		// 7. File creation (low risk, especially for non-critical files)
 		if (context.operation === 'create_file_or_folder') {
-			riskScore = Math.max(0.1, riskScore); // Minimum risk for new files
-			if (riskScore === 0.1) {
-				riskFactors.push('New file creation (low risk)');
+			// Only add minimum risk if not already a critical file
+			if (!isCriticalFile) {
+				riskScore = Math.max(0.05, riskScore); // Very low risk for new non-critical files
+				if (riskScore === 0.05) {
+					riskFactors.push('New file creation (low risk)');
+				}
+			} else {
+				riskScore = Math.max(0.1, riskScore); // Slightly higher for critical files
+			}
+		}
+
+		// 8. Small edits are very low risk (basic operations like adding comments, small changes)
+		if (context.operation === 'edit_file' && context.originalContent && context.newContent) {
+			const sizeChangeRatio = Math.abs(context.newContent.length - context.originalContent.length) / Math.max(context.originalContent.length, 1);
+			if (sizeChangeRatio < 0.05 && !isCriticalFile) {
+				// Very small changes (< 5%) to non-critical files are very low risk
+				riskScore = Math.max(0.05, riskScore);
+				confidenceFactors.push('Very small change (< 5%)');
 			}
 		}
 

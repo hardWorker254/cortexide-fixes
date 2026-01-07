@@ -164,10 +164,12 @@ registerAction2(class extends Action2 {
 
 		if (!instruction) return
 
-		// Check for model selection
-		const modelSelection = settingsService.state.modelSelectionOfFeature['Chat']
+		// Check for model selection and resolve "auto" if needed
+		const modelSelection = settingsService.resolveAutoModelSelection(
+			settingsService.state.modelSelectionOfFeature['Chat']
+		)
 		if (!modelSelection) {
-			notificationService.warn('Please select a model in CortexIDE Settings to use Inline Edit.')
+			notificationService.error('No model provider configured. Please configure a model provider in CortexIDE Settings.')
 			return
 		}
 
@@ -232,11 +234,15 @@ ${contextCode}
 
 				const userMessage = `Edit instruction: ${instruction}\n\nGenerate a SEARCH/REPLACE block for the selected code.`
 
+				// Ensure modelSelection is resolved and not null
+				if (!modelSelection || modelSelection.providerName === 'auto') {
+					notificationService.error('Failed to resolve model selection. Please configure a model provider in CortexIDE Settings.')
+					return
+				}
+
 				const chatOptions = settingsService.state.optionsOfModelSelection['Chat']
-				// Skip "auto" - it's not a real provider
-				const modelOptions = modelSelection && !(modelSelection.providerName === 'auto' && modelSelection.modelName === 'auto')
-					? chatOptions[modelSelection.providerName]?.[modelSelection.modelName]
-					: undefined
+				// Model selection is already resolved above, so we can safely access options
+				const modelOptions = chatOptions[modelSelection.providerName]?.[modelSelection.modelName]
 				const overrides = settingsService.state.overridesOfModel
 
 				requestId = llmMessageService.sendLLMMessage({

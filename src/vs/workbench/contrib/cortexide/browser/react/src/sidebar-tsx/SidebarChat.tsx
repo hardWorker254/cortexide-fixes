@@ -2239,17 +2239,24 @@ const MCPToolWrapper = ({ toolMessage }: WrapperProps<string>) => {
 
 	if (toolMessage.type === 'success' || toolMessage.type === 'tool_request') {
 		const { result } = toolMessage
-		const resultStr = result ? mcpService.stringifyResult(result) : 'null'
-		componentParams.children = <ToolChildrenWrapper>
-			<SmallProseWrapper>
-				<ChatMarkdownRender
-					string={`\`\`\`json\n${resultStr}\n\`\`\``}
-					chatMessageLocation={undefined}
-					isApplyEnabled={false}
-					isLinkDetectionEnabled={true}
-				/>
-			</SmallProseWrapper>
-		</ToolChildrenWrapper>
+		if (result) {
+			const resultStr = mcpService.stringifyResult(result)
+			// Check if result is text (not JSON) - text events return plain text, others return JSON
+			// Type guard: check if result has 'event' property and it's 'text'
+			const isTextResult = typeof result === 'object' && result !== null && 'event' in result && (result as any).event === 'text'
+			// If it's text, display as markdown; otherwise display as JSON code block
+			const displayContent = isTextResult ? resultStr : `\`\`\`json\n${resultStr}\n\`\`\``
+			componentParams.children = <ToolChildrenWrapper>
+				<SmallProseWrapper>
+					<ChatMarkdownRender
+						string={displayContent}
+						chatMessageLocation={undefined}
+						isApplyEnabled={false}
+						isLinkDetectionEnabled={true}
+					/>
+				</SmallProseWrapper>
+			</ToolChildrenWrapper>
+		}
 	}
 	else if (toolMessage.type === 'tool_error') {
 		const { result } = toolMessage
@@ -3375,11 +3382,13 @@ const PlanComponent = React.memo(({ message, isCheckpointGhost, threadId, messag
 																				{toolMsg.result}
 																			</div>
 																		)}
-																		{isSuccess && toolMsg.result && typeof toolMsg.result === 'object' && (
+																		{isSuccess && toolMsg.result && (
 																			<details className="mt-1">
 																				<summary className="text-void-fg-3 cursor-pointer text-xs hover:text-void-fg-2">View result</summary>
 																				<pre className="mt-1 p-2 bg-void-bg-2 rounded text-xs overflow-auto max-h-32 border border-void-border-1">
-																					{JSON.stringify(toolMsg.result, null, 2)}
+																					{typeof toolMsg.result === 'string'
+																						? toolMsg.result
+																						: JSON.stringify(toolMsg.result, null, 2)}
 																				</pre>
 																			</details>
 																		)}
@@ -4101,7 +4110,10 @@ export const SidebarChat = () => {
 		await addImagesRaw(files);
 	}, [addImagesRaw, settingsState, accessor]);
 
-	const isDisabled = (instructionsAreEmpty && imageAttachments.length === 0 && pdfAttachments.length === 0) || !!isFeatureNameDisabled('Chat', settingsState)
+	// Compute isDisabled - ensure it's reactive to settings changes
+	const isDisabled = useMemo(() => {
+		return (instructionsAreEmpty && imageAttachments.length === 0 && pdfAttachments.length === 0) || !!isFeatureNameDisabled('Chat', settingsState)
+	}, [instructionsAreEmpty, imageAttachments.length, pdfAttachments.length, settingsState])
 
 	const sidebarRef = useRef<HTMLDivElement>(null)
 	const scrollContainerRef = useRef<HTMLDivElement | null>(null)
@@ -4561,11 +4573,14 @@ export const SidebarChat = () => {
 	}, [setInstructionsAreEmpty])
 	const onKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
 		if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-			onSubmit()
+			// Check isDisabled again at the time of key press (not closure value)
+			if (!isDisabled && !isRunning) {
+				onSubmit()
+			}
 		} else if (e.key === 'Escape' && isRunning) {
 			onAbort()
 		}
-	}, [onSubmit, onAbort, isRunning])
+	}, [onSubmit, onAbort, isRunning, isDisabled])
 
 	// Context usage calculation + warning (partially memoized - draft tokens calculated on each render)
 	const [ctxWarned, setCtxWarned] = useState(false)

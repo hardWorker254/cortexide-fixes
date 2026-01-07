@@ -791,10 +791,16 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 
 		// Detect if using local provider for prefix/suffix optimization
 		const featureName: FeatureName = 'Autocomplete'
-		const modelSelection = this._settingsService.state.modelSelectionOfFeature[featureName]
-		const isLocal = modelSelection && modelSelection.providerName !== 'auto'
-			? isLocalProvider(modelSelection.providerName, this._settingsService.state.settingsOfProvider)
-			: false
+		const modelSelection = this._settingsService.resolveAutoModelSelection(
+			this._settingsService.state.modelSelectionOfFeature[featureName]
+		)
+
+		if (!modelSelection || modelSelection.providerName === 'auto') {
+			// No model available - skip autocomplete
+			return []
+		}
+
+		const isLocal = isLocalProvider(modelSelection.providerName, this._settingsService.state.settingsOfProvider)
 
 		const { shouldGenerate, predictionType, llmPrefix, llmSuffix, stopTokens } = getCompletionOptions(prefixAndSuffix, relevantContext, justAcceptedAutocompletion, isLocal)
 
@@ -822,15 +828,11 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 		console.log('starting autocomplete...', predictionType)
 
 		const overridesOfModel = this._settingsService.state.overridesOfModel
-		// Skip "auto" - it's not a real provider
-		const modelSelectionOptions = modelSelection && !(modelSelection.providerName === 'auto' && modelSelection.modelName === 'auto')
-			? this._settingsService.state.optionsOfModelSelection[featureName][modelSelection.providerName]?.[modelSelection.modelName]
-			: undefined
+		// Model selection is already resolved above, so we can safely access options
+		const modelSelectionOptions = this._settingsService.state.optionsOfModelSelection[featureName]?.[modelSelection.providerName]?.[modelSelection.modelName]
 
 		// Warm up local model in background (fire-and-forget, doesn't block)
-		if (modelSelection && modelSelection.providerName !== 'auto' && modelSelection.modelName !== 'auto') {
-			this._modelWarmupService.warmupModelIfNeeded(modelSelection.providerName, modelSelection.modelName, featureName)
-		}
+		this._modelWarmupService.warmupModelIfNeeded(modelSelection.providerName, modelSelection.modelName, featureName)
 
 		// set parameters of `newAutocompletion` appropriately
 		newAutocompletion.llmPromise = new Promise((resolve, reject) => {

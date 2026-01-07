@@ -176,10 +176,21 @@ Provide your review annotations as a JSON array:`;
 
 			// Get model selection from settings (use Chat feature model selection)
 			const settings = this.settingsService.state;
-			const modelSelection = settings.modelSelectionOfFeature['Chat'] || { providerName: 'auto', modelName: 'auto' };
-			const modelOptions = modelSelection && !(modelSelection.providerName === 'auto' && modelSelection.modelName === 'auto')
-				? settings.optionsOfModelSelection['Chat']?.[modelSelection.providerName]?.[modelSelection.modelName]
-				: undefined;
+			const modelSelection = this.settingsService.resolveAutoModelSelection(
+				settings.modelSelectionOfFeature['Chat'] || { providerName: 'auto', modelName: 'auto' }
+			);
+
+			if (!modelSelection) {
+				return {
+					uri,
+					annotations: [],
+					summary: 'No model provider configured. Please configure a model provider in CortexIDE Settings.',
+					success: false,
+					error: 'No models available',
+				};
+			}
+
+			const modelOptions = settings.optionsOfModelSelection['Chat']?.[modelSelection.providerName]?.[modelSelection.modelName];
 			const overrides = settings.overridesOfModel;
 
 			// Call LLM directly

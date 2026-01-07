@@ -569,8 +569,10 @@ export class ToolsService implements IToolsService {
 
 			rewrite_file: async ({ uri, newContent }) => {
 				await cortexideModelService.initializeModel(uri)
-				if (this.commandBarService.getStreamState(uri) === 'streaming') {
-					throw new Error(`Another LLM is currently making changes to this file. Please stop streaming for now and ask the user to resume later.`)
+				const streamState = this.commandBarService.getStreamState(uri)
+				if (streamState === 'streaming') {
+					// Only block if actually streaming to the same file - allow if streaming to different file
+					throw new Error(`Cannot edit file ${uri.fsPath}: Another operation is currently streaming changes to this file. Please wait for it to complete or cancel it first.`)
 				}
 				await editCodeService.callBeforeApplyOrEdit(uri)
 				editCodeService.instantlyRewriteFile({ uri, newContent })
@@ -585,8 +587,10 @@ export class ToolsService implements IToolsService {
 
 			edit_file: async ({ uri, searchReplaceBlocks }) => {
 				await cortexideModelService.initializeModel(uri)
-				if (this.commandBarService.getStreamState(uri) === 'streaming') {
-					throw new Error(`Another LLM is currently making changes to this file. Please stop streaming for now and ask the user to resume later.`)
+				const streamState = this.commandBarService.getStreamState(uri)
+				if (streamState === 'streaming') {
+					// Only block if actually streaming to the same file - allow if streaming to different file
+					throw new Error(`Cannot edit file ${uri.fsPath}: Another operation is currently streaming changes to this file. Please wait for it to complete or cancel it first.`)
 				}
 				await editCodeService.callBeforeApplyOrEdit(uri)
 				editCodeService.instantlyApplySearchReplaceBlocks({ uri, searchReplaceBlocks })
