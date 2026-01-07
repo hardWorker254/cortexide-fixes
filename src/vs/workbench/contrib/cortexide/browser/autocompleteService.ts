@@ -24,6 +24,7 @@ import { IConvertToLLMMessageService } from './convertToLLMMessageService.js';
 import { getPerformanceHarness } from '../common/performanceHarness.js';
 import { isLocalProvider } from './convertToLLMMessageService.js';
 import { IModelWarmupService } from '../common/modelWarmupService.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 
 
 
@@ -113,13 +114,16 @@ class LRUCache<K, V> {
 		const value = this.items.get(key);
 
 		if (value !== undefined) {
-			// Call dispose callback if it exists
+			// Remove from cache first, then call dispose callback
+			// This prevents the callback from seeing the item as still in cache
+			this.items.delete(key);
+			this.keyOrder = this.keyOrder.filter(k => k !== key);
+
+			// Call dispose callback if it exists (after removal to avoid issues)
 			if (this.disposeCallback) {
 				this.disposeCallback(value, key);
 			}
 
-			this.items.delete(key);
-			this.keyOrder = this.keyOrder.filter(k => k !== key);
 			return true;
 		}
 
@@ -170,8 +174,8 @@ type Autocompletion = {
 	_newlineCount: number;
 };
 
-const DEBOUNCE_TIME = 500;
-const TIMEOUT_TIME = 60000;
+const DEBOUNCE_TIME = 250; // Reduced from 500ms for better responsiveness
+const TIMEOUT_TIME = 15000; // Reduced from 60s to 15s for autocomplete
 const MAX_CACHE_SIZE = 20;
 const MAX_PENDING_REQUESTS = 2;
 
@@ -496,8 +500,7 @@ const getAutocompletionMatchup = ({ prefix, autocompletion }: { prefix: string; 
 
 	if (lineStart < 0) {
 		// console.log('@undefined3')
-
-		console.error('Error: No line found.');
+		console.warn('[Autocomplete] Matchup calculation failed: No line found. This may occur if the prefix changed significantly.');
 		return undefined;
 	}
 	const currentPrefixLine = getLastLine(trimmedCurrentPrefix)
@@ -512,8 +515,7 @@ const getAutocompletionMatchup = ({ prefix, autocompletion }: { prefix: string; 
 	const charMatchIdx = fullCompletionLine.indexOf(currentPrefixLine)
 	if (charMatchIdx < 0) {
 		// console.log('@undefined4', charMatchIdx)
-
-		console.error('Warning: Found character with negative index. This should never happen.')
+		console.warn('[Autocomplete] Matchup calculation failed: Character match not found. Prefix may have changed significantly.');
 		return undefined
 	}
 
@@ -637,6 +639,7 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 
 	private _lastCompletionStart = 0
 	private _lastCompletionAccept = 0
+	private _hasShownNoModelWarning = false
 	// private _lastPrefix: string = ''
 
 	// used internally by vscode
@@ -647,12 +650,16 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 	): Promise<InlineCompletion[]> {
 		const startTime = performance.now();
 		const isEnabled = this._settingsService.state.globalSettings.enableAutocomplete
-		if (!isEnabled) return []
+		if (!isEnabled) {
+			console.debug('[Autocomplete] Disabled in settings. Enable it in CortexIDE Settings > Feature Options > Autocomplete')
+			return []
+		}
 
 		// Performance optimization: Early returns for long lines or binary files
 		const lineLength = model.getValueLengthInRange(new Range(1, 1, position.lineNumber, position.column));
 		if (lineLength > 500) {
 			// Skip autocomplete for very long lines (>500 chars)
+			console.debug('[Autocomplete] Skipped: Line too long (>500 chars)')
 			return [];
 		}
 
@@ -660,6 +667,7 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 		const languageId = model.getLanguageId();
 		const codeLanguages = ['typescript', 'javascript', 'typescriptreact', 'javascriptreact', 'python', 'java', 'go', 'rust', 'cpp', 'c', 'cs', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'dart'];
 		if (!codeLanguages.includes(languageId)) {
+			console.debug(`[Autocomplete] Skipped: Language "${languageId}" not supported. Supported: ${codeLanguages.join(', ')}`)
 			return [];
 		}
 
@@ -674,8 +682,11 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 			this._autocompletionsOfDocument[docUriStr] = new LRUCache<number, Autocompletion>(
 				MAX_CACHE_SIZE,
 				(autocompletion: Autocompletion) => {
-					if (autocompletion.requestId)
+					// Only abort if request is still pending (don't abort finished requests)
+					if (autocompletion.status === 'pending' && autocompletion.requestId) {
+						console.debug(`[Autocomplete] Aborting request ${autocompletion.id} due to cache eviction`)
 						this._llmMessageService.abort(autocompletion.requestId)
+					}
 				}
 			)
 		}
@@ -726,7 +737,9 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 
 				} catch (e) {
 					this._autocompletionsOfDocument[docUriStr].delete(cachedAutocompletion.id)
-					console.error('Error creating autocompletion (1): ' + e)
+					const errorMessage = e instanceof Error ? e.message : String(e)
+					console.error('[Autocomplete] Error with cached autocompletion:', errorMessage)
+					// Don't show notification for cached completion errors (less critical)
 				}
 
 			} else if (cachedAutocompletion.status === 'error') {
@@ -765,6 +778,7 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 
 
 		// if there are too many pending requests, cancel the oldest one
+		// But only cancel if we're about to create a new one (not if we're just checking cache)
 		let numPending = 0
 		let oldestPending: Autocompletion | undefined = undefined
 		for (const autocompletion of this._autocompletionsOfDocument[docUriStr].items.values()) {
@@ -773,12 +787,15 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 				if (oldestPending === undefined) {
 					oldestPending = autocompletion
 				}
-				if (numPending >= MAX_PENDING_REQUESTS) {
-					// cancel the oldest pending request and remove it from cache
-					this._autocompletionsOfDocument[docUriStr].delete(oldestPending.id)
-					break
-				}
 			}
+		}
+
+		// Only cancel if we have too many pending AND we're about to create a new request
+		// (This check happens after we've already checked the cache, so we know we need a new request)
+		if (numPending >= MAX_PENDING_REQUESTS && oldestPending) {
+			// cancel the oldest pending request and remove it from cache
+			console.debug(`[Autocomplete] Cancelling oldest pending request (${oldestPending.id}) to make room for new one`)
+			this._autocompletionsOfDocument[docUriStr].delete(oldestPending.id)
 		}
 
 
@@ -797,6 +814,11 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 
 		if (!modelSelection || modelSelection.providerName === 'auto') {
 			// No model available - skip autocomplete
+			// Only show notification once per session to avoid spam
+			if (!this._hasShownNoModelWarning) {
+				this._hasShownNoModelWarning = true
+				this._notificationService.warn('Autocomplete requires a model with FIM (Fill-In-the-Middle) support. Please select a model in CortexIDE Settings > Feature Options > Autocomplete. Recommended: qwen2.5-coder models (Ollama) or codestral (Mistral).')
+			}
 			return []
 		}
 
@@ -804,7 +826,10 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 
 		const { shouldGenerate, predictionType, llmPrefix, llmSuffix, stopTokens } = getCompletionOptions(prefixAndSuffix, relevantContext, justAcceptedAutocompletion, isLocal)
 
-		if (!shouldGenerate) return []
+		if (!shouldGenerate) {
+			console.debug('[Autocomplete] Skipped: shouldGenerate=false (likely cursor position or context not suitable for completion)')
+			return []
+		}
 
 
 
@@ -904,11 +929,20 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 			newAutocompletion.requestId = requestId
 
 			// if the request hasnt resolved in TIMEOUT_TIME seconds, reject it
-			setTimeout(() => {
+			const timeoutId = setTimeout(() => {
 				if (newAutocompletion.status === 'pending') {
+					newAutocompletion.status = 'error'
+					if (newAutocompletion.requestId) {
+						this._llmMessageService.abort(newAutocompletion.requestId)
+					}
 					reject('Timeout receiving message to LLM.')
 				}
 			}, TIMEOUT_TIME)
+
+			// Clear timeout if promise resolves/rejects before timeout
+			if (newAutocompletion.llmPromise) {
+				newAutocompletion.llmPromise.finally(() => clearTimeout(timeoutId))
+			}
 
 		})
 
@@ -927,6 +961,19 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 			const currentPrefixAndSuffix = getPrefixAndSuffixInfo(model, position)
 			const currentPrefix = currentPrefixAndSuffix.prefix
 
+			// Validate that completion text is reasonable
+			if (!newAutocompletion.insertText || newAutocompletion.insertText.trim().length === 0) {
+				this._autocompletionsOfDocument[docUriStr].delete(newAutocompletion.id)
+				return []
+			}
+
+			// Check if prefix changed significantly (user typed a lot while waiting)
+			const prefixDiff = Math.abs(currentPrefix.length - newAutocompletion.prefix.length)
+			if (prefixDiff > 50) { // More than 50 chars difference suggests significant editing
+				this._autocompletionsOfDocument[docUriStr].delete(newAutocompletion.id)
+				return []
+			}
+
 			// Calculate the matchup bounds - this determines where in the generated text to start showing the completion
 			const autocompletionMatchup = getAutocompletionMatchup({ prefix: currentPrefix, autocompletion: newAutocompletion })
 
@@ -939,6 +986,13 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 
 			const inlineCompletions = toInlineCompletions({ autocompletionMatchup, autocompletion: newAutocompletion, prefixAndSuffix: currentPrefixAndSuffix, position })
 
+			// Final validation: ensure completion text is reasonable length
+			if (inlineCompletions.length > 0 && inlineCompletions[0].insertText.length > 10000) {
+				// Completion is suspiciously long, likely an error
+				this._autocompletionsOfDocument[docUriStr].delete(newAutocompletion.id)
+				return []
+			}
+
 			// Record performance metrics
 			const providerTime = performance.now() - providerStartTime;
 			const totalTime = performance.now() - startTime;
@@ -948,7 +1002,16 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 
 		} catch (e) {
 			this._autocompletionsOfDocument[docUriStr].delete(newAutocompletion.id)
-			console.error('Error creating autocompletion (2): ' + e)
+			const errorMessage = e instanceof Error ? e.message : String(e)
+			console.error('[Autocomplete] Error creating autocompletion:', errorMessage)
+
+			// Show user-friendly error for persistent failures (not timeouts or aborts)
+			if (!errorMessage.includes('Timeout') && !errorMessage.includes('Aborted')) {
+				// Only show error notification occasionally to avoid spam
+				if (Math.random() < 0.1) { // 10% chance to show notification
+					this._notificationService.warn(`Autocomplete error: ${errorMessage}. Check console for details.`)
+				}
+			}
 
 			// Record performance metrics even on error
 			const providerTime = performance.now() - providerStartTime;
@@ -967,7 +1030,8 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 		@IModelService private readonly _modelService: IModelService,
 		@ICortexideSettingsService private readonly _settingsService: ICortexideSettingsService,
 		@IConvertToLLMMessageService private readonly _convertToLLMMessageService: IConvertToLLMMessageService,
-		@IModelWarmupService private readonly _modelWarmupService: IModelWarmupService
+		@IModelWarmupService private readonly _modelWarmupService: IModelWarmupService,
+		@INotificationService private readonly _notificationService: INotificationService
 		// @IContextGatheringService private readonly _contextGatheringService: IContextGatheringService,
 	) {
 		super()
@@ -1006,6 +1070,14 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 					if (matchup) {
 						console.log('ACCEPT', autocompletion.id)
 						this._lastCompletionAccept = Date.now()
+
+						// Only abort if the request is still pending (not if it's already finished)
+						// This prevents aborting requests that have already completed successfully
+						if (autocompletion.status === 'pending' && autocompletion.requestId) {
+							this._llmMessageService.abort(autocompletion.requestId)
+						}
+
+						// Remove from cache (this won't abort if status is 'finished')
 						this._autocompletionsOfDocument[docUriStr].delete(autocompletion.id);
 					}
 				});

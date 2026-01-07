@@ -119,17 +119,43 @@ export const modelFilterOfFeatureName: {
 		) => boolean;
 		emptyMessage: null | { message: string, priority: 'always' | 'fallback' }
 	} } = {
-	'Autocomplete': { filter: (o, opts) => {
-		// Skip "auto" option - it's not a real model
-		if (o.providerName === 'auto' && o.modelName === 'auto') return false
-		return getModelCapabilities(o.providerName, o.modelName, opts.overridesOfModel).supportsFIM
-	}, emptyMessage: { message: 'No models support FIM', priority: 'always' } },
-	'Chat': { filter: o => {
-		// Always allow "Auto" option
-		if (o.providerName === 'auto' && o.modelName === 'auto') return true
-		// For other models, check capabilities
-		return true
-	}, emptyMessage: null, },
+	'Autocomplete': {
+		filter: (o, opts) => {
+			// Skip "auto" option - it's not a real model
+			if (o.providerName === 'auto' && o.modelName === 'auto') return false
+			const capabilities = getModelCapabilities(o.providerName, o.modelName, opts.overridesOfModel)
+
+			// Check if model has FIM support
+			if (capabilities.supportsFIM) return true
+
+			// Check if user manually enabled FIM via overrides
+			if (opts.overridesOfModel?.[o.providerName]?.[o.modelName]?.supportsFIM === true) return true
+
+			// Allow providers that actually support FIM
+			// Providers with confirmed FIM support:
+			// - mistral: Native FIM endpoint (codestral models)
+			// - ollama: Supports FIM (qwen2.5-coder models)
+			// - openRouter: May support FIM depending on backend model
+			// - openAICompatible: May support FIM if backend supports it (e.g., local servers)
+			// - liteLLM: May support FIM depending on backend
+			// Note: OpenAI's official API does NOT support suffix parameter (except gpt-3.5-turbo-instruct)
+			// Note: vLLM and lmStudio do NOT support suffix parameter
+			const providersWithFIMSupport: readonly ProviderName[] = ['mistral', 'ollama', 'openRouter', 'openAICompatible', 'liteLLM']
+			if (providersWithFIMSupport.includes(o.providerName)) {
+				return true
+			}
+
+			return false
+		}, emptyMessage: { message: 'No models support FIM. Recommended: Mistral codestral (cloud) or Ollama qwen2.5-coder (local). OpenAI\'s official API does not support FIM.', priority: 'always' }
+	},
+	'Chat': {
+		filter: o => {
+			// Always allow "Auto" option
+			if (o.providerName === 'auto' && o.modelName === 'auto') return true
+			// For other models, check capabilities
+			return true
+		}, emptyMessage: null,
+	},
 	'Ctrl+K': { filter: o => true, emptyMessage: null, },
 	'Apply': { filter: o => true, emptyMessage: null, },
 	'SCM': { filter: o => true, emptyMessage: null, },
