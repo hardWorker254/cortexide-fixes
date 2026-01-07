@@ -923,8 +923,21 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 			await newAutocompletion.llmPromise
 			// console.log('id: ' + newAutocompletion.id)
 
-			const autocompletionMatchup: AutocompletionMatchupBounds = { startIdx: 0, startLine: 0, startCharacter: 0 }
-			const inlineCompletions = toInlineCompletions({ autocompletionMatchup, autocompletion: newAutocompletion, prefixAndSuffix, position })
+			// Recalculate prefix and suffix in case user typed more while waiting for LLM response
+			const currentPrefixAndSuffix = getPrefixAndSuffixInfo(model, position)
+			const currentPrefix = currentPrefixAndSuffix.prefix
+
+			// Calculate the matchup bounds - this determines where in the generated text to start showing the completion
+			const autocompletionMatchup = getAutocompletionMatchup({ prefix: currentPrefix, autocompletion: newAutocompletion })
+
+			// If matchup is undefined, the prefix has changed too much (user typed beyond the completion)
+			// In this case, return empty completions
+			if (!autocompletionMatchup) {
+				this._autocompletionsOfDocument[docUriStr].delete(newAutocompletion.id)
+				return []
+			}
+
+			const inlineCompletions = toInlineCompletions({ autocompletionMatchup, autocompletion: newAutocompletion, prefixAndSuffix: currentPrefixAndSuffix, position })
 
 			// Record performance metrics
 			const providerTime = performance.now() - providerStartTime;
