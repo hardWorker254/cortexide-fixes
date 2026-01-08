@@ -179,9 +179,58 @@ const TIMEOUT_TIME = 15000; // Reduced from 60s to 15s for autocomplete
 const MAX_CACHE_SIZE = 20;
 const MAX_PENDING_REQUESTS = 2;
 
+// Detect if text contains syntax from a different programming language
+const detectLanguageMismatch = (text: string, expectedLanguage: string): boolean => {
+	const trimmed = text.trim();
+	if (!trimmed) return false;
+
+	// Language-specific syntax patterns
+	const languagePatterns: Record<string, RegExp[]> = {
+		javascript: [
+			/^def\s+\w+\s*\(/,           // Python function definition
+			/^class\s+\w+:/,              // Python class (but JS has classes too, so be careful)
+			/^import\s+\w+\s+from/,      // Python import (but JS has this too)
+			/self\./,                     // Python self
+			/__init__/,                   // Python __init__
+			/print\s*\(/,                 // Python print (but JS console.log is more common)
+		],
+		typescript: [
+			/^def\s+\w+\s*\(/,           // Python function definition
+			/^class\s+\w+:/,             // Python class
+			/self\./,                     // Python self
+			/__init__/,                   // Python __init__
+		],
+		python: [
+			/function\s+\w+\s*\(/,       // JavaScript function
+			/const\s+\w+\s*=\s*\(/,      // JavaScript arrow function
+			/let\s+\w+\s*=\s*\(/,        // JavaScript let
+			/var\s+\w+\s*=\s*\(/,        // JavaScript var
+			/console\.log/,              // JavaScript console.log
+			/=>\s*{/,                    // JavaScript arrow function
+		],
+		java: [
+			/^def\s+\w+\s*\(/,           // Python function
+			/function\s+\w+\s*\(/,       // JavaScript function
+			/self\./,                     // Python self
+		],
+	};
+
+	const patterns = languagePatterns[expectedLanguage];
+	if (!patterns) return false;
+
+	// Check if text contains syntax from a different language
+	for (const pattern of patterns) {
+		if (pattern.test(trimmed)) {
+			return true; // Language mismatch detected
+		}
+	}
+
+	return false;
+};
+
 // Filter out non-code content from autocomplete results
 // This helps prevent models from outputting explanatory text, comments in other languages, etc.
-const filterNonCodeContent = (text: string): string => {
+const filterNonCodeContent = (text: string, languageId?: string): string => {
 	// Remove lines that are mostly non-ASCII characters (likely explanations or non-code)
 	// But keep code that might legitimately contain Unicode (e.g., string literals, comments)
 	const lines = text.split('\n');
@@ -196,6 +245,11 @@ const filterNonCodeContent = (text: string): string => {
 		// If line is mostly non-ASCII and doesn't have code indicators, skip it
 		if (nonAsciiRatio > 0.5 && !hasCodeIndicators) {
 			continue;
+		}
+
+		// Check for language mismatch if language is known
+		if (languageId && detectLanguageMismatch(line, languageId)) {
+			continue; // Skip lines with wrong language syntax
 		}
 
 		filteredLines.push(line);
@@ -910,7 +964,12 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 					try {
 						// Process the streamed text (same processing as final message)
 						const [text, _] = extractCodeFromRegular({ text: fullText, recentlyAddedTextLen: 0 })
-						const processedText = processStartAndEndSpaces(text)
+						
+						// Filter out non-code content and wrong language syntax
+						const languageId = model.getLanguageId();
+						const filteredText = filterNonCodeContent(text, languageId)
+						
+						const processedText = processStartAndEndSpaces(filteredText)
 
 						// Update the autocompletion with partial text
 						// Note: This doesn't trigger UI refresh automatically, but ensures the final result is ready
@@ -936,11 +995,18 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 					newAutocompletion.endTime = Date.now()
 					newAutocompletion.status = 'finished'
 					const [text, _] = extractCodeFromRegular({ text: fullText, recentlyAddedTextLen: 0 })
-
-					// Filter out suspicious non-code content (e.g., Chinese characters in code completions)
+					
+					// Filter out suspicious non-code content (e.g., Chinese characters, wrong language syntax)
 					// This helps prevent models from outputting explanatory text or non-code content
-					const filteredText = filterNonCodeContent(text)
-
+					const languageId = model.getLanguageId();
+					const filteredText = filterNonCodeContent(text, languageId)
+					
+					// Final check: reject if the entire completion is in the wrong language
+					if (detectLanguageMismatch(filteredText, languageId)) {
+						onError({ message: 'Autocomplete returned code in wrong language. Please try again.', fullError: null });
+						return;
+					}
+					
 					newAutocompletion.insertText = processStartAndEndSpaces(filteredText)
 
 					// handle special case for predicting starting on the next line, add a newline character
@@ -1107,7 +1173,7 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 						// The dispose callback only aborts if status is 'pending'
 						const wasPending = autocompletion.status === 'pending'
 						autocompletion.status = 'finished'
-						
+
 						// Only abort if the request was still pending (not if it's already finished)
 						// This prevents aborting requests that have already completed successfully
 						if (wasPending && autocompletion.requestId) {
