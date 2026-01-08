@@ -964,11 +964,11 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 					try {
 						// Process the streamed text (same processing as final message)
 						const [text, _] = extractCodeFromRegular({ text: fullText, recentlyAddedTextLen: 0 })
-						
+
 						// Filter out non-code content and wrong language syntax
 						const languageId = model.getLanguageId();
 						const filteredText = filterNonCodeContent(text, languageId)
-						
+
 						const processedText = processStartAndEndSpaces(filteredText)
 
 						// Update the autocompletion with partial text
@@ -995,18 +995,21 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 					newAutocompletion.endTime = Date.now()
 					newAutocompletion.status = 'finished'
 					const [text, _] = extractCodeFromRegular({ text: fullText, recentlyAddedTextLen: 0 })
-					
+
 					// Filter out suspicious non-code content (e.g., Chinese characters, wrong language syntax)
 					// This helps prevent models from outputting explanatory text or non-code content
 					const languageId = model.getLanguageId();
 					const filteredText = filterNonCodeContent(text, languageId)
-					
+
 					// Final check: reject if the entire completion is in the wrong language
 					if (detectLanguageMismatch(filteredText, languageId)) {
-						onError({ message: 'Autocomplete returned code in wrong language. Please try again.', fullError: null });
-						return;
+						// Reject this completion silently - it will be filtered out
+						newAutocompletion.status = 'error'
+						newAutocompletion.insertText = ''
+						reject('Autocomplete returned code in wrong language')
+						return
 					}
-					
+
 					newAutocompletion.insertText = processStartAndEndSpaces(filteredText)
 
 					// handle special case for predicting starting on the next line, add a newline character
