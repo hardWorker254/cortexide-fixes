@@ -580,8 +580,8 @@ const prepareMessages_anthropic_tools = (messages: SimpleLLMMessage[], supportsA
 					// Anthropic SDK expects specific MIME types, cast appropriately
 					const mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' =
 						image.mimeType === 'image/svg+xml' ? 'image/png' :
-						(image.mimeType === 'image/png' || image.mimeType === 'image/jpeg' || image.mimeType === 'image/webp' || image.mimeType === 'image/gif'
-							? image.mimeType : 'image/png');
+							(image.mimeType === 'image/png' || image.mimeType === 'image/jpeg' || image.mimeType === 'image/webp' || image.mimeType === 'image/gif'
+								? image.mimeType : 'image/png');
 					contentParts.push({
 						type: 'image',
 						source: {
@@ -698,8 +698,8 @@ const prepareMessages_XML_tools = (messages: SimpleLLMMessage[], supportsAnthrop
 						// Anthropic SDK expects specific MIME types, cast appropriately
 						const mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' =
 							image.mimeType === 'image/svg+xml' ? 'image/png' :
-							(image.mimeType === 'image/png' || image.mimeType === 'image/jpeg' || image.mimeType === 'image/webp' || image.mimeType === 'image/gif'
-								? image.mimeType : 'image/png');
+								(image.mimeType === 'image/png' || image.mimeType === 'image/jpeg' || image.mimeType === 'image/webp' || image.mimeType === 'image/gif'
+									? image.mimeType : 'image/png');
 						contentParts.push({
 							type: 'image',
 							source: {
@@ -734,8 +734,8 @@ const prepareMessages_XML_tools = (messages: SimpleLLMMessage[], supportsAnthrop
 								const base64 = uint8ArrayToBase64(image.data);
 								const mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' =
 									image.mimeType === 'image/svg+xml' ? 'image/png' :
-									(image.mimeType === 'image/png' || image.mimeType === 'image/jpeg' || image.mimeType === 'image/webp' || image.mimeType === 'image/gif'
-										? image.mimeType : 'image/png');
+										(image.mimeType === 'image/png' || image.mimeType === 'image/jpeg' || image.mimeType === 'image/webp' || image.mimeType === 'image/gif'
+											? image.mimeType : 'image/png');
 								contentArray.push({
 									type: 'image',
 									source: {
@@ -771,8 +771,8 @@ const prepareMessages_XML_tools = (messages: SimpleLLMMessage[], supportsAnthrop
 								// Anthropic SDK expects specific MIME types, cast appropriately
 								const mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' =
 									image.mimeType === 'image/svg+xml' ? 'image/png' :
-									(image.mimeType === 'image/png' || image.mimeType === 'image/jpeg' || image.mimeType === 'image/webp' || image.mimeType === 'image/gif'
-										? image.mimeType : 'image/png');
+										(image.mimeType === 'image/png' || image.mimeType === 'image/jpeg' || image.mimeType === 'image/webp' || image.mimeType === 'image/gif'
+											? image.mimeType : 'image/png');
 								contentArray.push({
 									type: 'image',
 									source: {
@@ -844,7 +844,7 @@ const prepareOpenAIOrAnthropicMessages = ({
 
 	type MesType = (typeof messages)[0]
 
-    // ================ fit into context ================
+	// ================ fit into context ================
 
 	// the higher the weight, the higher the desire to truncate - TRIM HIGHEST WEIGHT MESSAGES
 	const alreadyTrimmedIdxes = new Set<number>()
@@ -888,8 +888,8 @@ const prepareOpenAIOrAnthropicMessages = ({
 		return largestIndex
 	}
 
-    let totalLen = 0
-    for (const m of messages) { totalLen += m.content.length }
+	let totalLen = 0
+	for (const m of messages) { totalLen += m.content.length }
 	const charsNeedToTrim = totalLen - Math.max(
 		(contextWindow - reservedOutputTokenSpace) * CHARS_PER_TOKEN, // can be 0, in which case charsNeedToTrim=everything, bad
 		5_000 // ensure we don't trim at least 5k chars (just a random small value)
@@ -1029,31 +1029,31 @@ const prepareOpenAIOrAnthropicMessages = ({
 			llmMessages.splice(0, 1); // delete first message
 			llmMessages.unshift(newFirstMessage); // add new first message
 		} else {
-		// Content is an array (may contain images/text parts)
-		// Prepend system message to the first text part, or add a new text part
-		const contentArray = [...firstMsg.content] as any[];
-		const firstTextIndex = contentArray.findIndex((c: any) => c.type === 'text');
+			// Content is an array (may contain images/text parts)
+			// Prepend system message to the first text part, or add a new text part
+			const contentArray = [...firstMsg.content] as any[];
+			const firstTextIndex = contentArray.findIndex((c: any) => c.type === 'text');
 
-		if (firstTextIndex !== -1) {
-			// Prepend to existing text part
-			contentArray[firstTextIndex] = {
-				type: 'text',
-				text: systemMsgPrefix + (contentArray[firstTextIndex] as any).text
+			if (firstTextIndex !== -1) {
+				// Prepend to existing text part
+				contentArray[firstTextIndex] = {
+					type: 'text',
+					text: systemMsgPrefix + (contentArray[firstTextIndex] as any).text
+				};
+			} else {
+				// No text part exists, add one at the beginning
+				contentArray.unshift({
+					type: 'text',
+					text: systemMsgPrefix.trim()
+				});
+			}
+
+			const newFirstMessage: AnthropicOrOpenAILLMMessage = {
+				role: 'user',
+				content: contentArray
 			};
-		} else {
-			// No text part exists, add one at the beginning
-			contentArray.unshift({
-				type: 'text',
-				text: systemMsgPrefix.trim()
-			});
-		}
-
-		const newFirstMessage: AnthropicOrOpenAILLMMessage = {
-			role: 'user',
-			content: contentArray
-		};
-		llmMessages.splice(0, 1); // delete first message
-		llmMessages.unshift(newFirstMessage); // add new first message
+			llmMessages.splice(0, 1); // delete first message
+			llmMessages.unshift(newFirstMessage); // add new first message
 		}
 	}
 
@@ -1332,8 +1332,8 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 				if (memories.length > 0) {
 					const memoryLines = memories.map(m => {
 						const typeLabel = m.entry.type === 'decision' ? 'Decision' :
-						                 m.entry.type === 'preference' ? 'Preference' :
-						                 m.entry.type === 'recentFile' ? 'Recent File' : 'Context';
+							m.entry.type === 'preference' ? 'Preference' :
+								m.entry.type === 'recentFile' ? 'Recent File' : 'Context';
 						return `- [${typeLabel}] ${m.entry.key}: ${m.entry.value}`;
 					});
 					relevantMemories = memoryLines.join('\n');
@@ -1471,7 +1471,7 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 			return result;
 		} catch (error) {
 			// Try to warm index if query failed (might not exist yet)
-			this.repoIndexerService.warmIndex(undefined).catch(() => {});
+			this.repoIndexerService.warmIndex(undefined).catch(() => { });
 			return null;
 		}
 	}
@@ -1534,8 +1534,8 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 					if (memories.length > 0) {
 						const memoryLines = memories.map(m => {
 							const typeLabel = m.entry.type === 'decision' ? 'Decision' :
-							                 m.entry.type === 'preference' ? 'Preference' :
-							                 m.entry.type === 'recentFile' ? 'Recent File' : 'Context';
+								m.entry.type === 'preference' ? 'Preference' :
+									m.entry.type === 'recentFile' ? 'Recent File' : 'Context';
 							return `- [${typeLabel}] ${m.entry.key}: ${m.entry.value}`;
 						});
 						relevantMemories = memoryLines.join('\n');
@@ -1576,7 +1576,7 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 							indexResults = result.results;
 							metrics = result.metrics;
 						} catch (err) {
-							this.repoIndexerService.warmIndex(undefined).catch(() => {});
+							this.repoIndexerService.warmIndex(undefined).catch(() => { });
 						}
 					}
 				}
@@ -1591,7 +1591,7 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 						indexResults = result.results;
 						metrics = result.metrics;
 					} catch (error) {
-						this.repoIndexerService.warmIndex(undefined).catch(() => {});
+						this.repoIndexerService.warmIndex(undefined).catch(() => { });
 					}
 				}
 			}
@@ -1618,7 +1618,7 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 				}
 			} else if (!repoIndexerPromise) {
 				// Index might be empty - try to warm it in background (only if we started query ourselves)
-				this.repoIndexerService.warmIndex(undefined).catch(() => {});
+				this.repoIndexerService.warmIndex(undefined).catch(() => { });
 			}
 		}
 
@@ -1720,7 +1720,7 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 			systemMessage = (systemMessage || '') + summary
 			llmMessages = tail
 			const afterTokens = approximateTotalTokens(llmMessages, systemMessage, aiInstructions)
-			try { this.notificationService.info(`Context: ~${beforeTokens} → ~${afterTokens} tokens (smart truncation)`)} catch {}
+			try { this.notificationService.info(`Context: ~${beforeTokens} → ~${afterTokens} tokens (smart truncation)`) } catch { }
 		}
 
 		const { messages, separateSystemMessage } = prepareMessages({
@@ -1753,15 +1753,16 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 
 		// Add language context to help model generate correct language code
 		// This is the PROPER fix - tell the model what language it's completing
+		// Make it explicit and strong to prevent wrong language or explanatory comments
 		const languageContext = languageId && featureName === 'Autocomplete' 
-			? `// Language: ${languageId}\n` 
+			? `// Language: ${languageId}\n// Generate ${languageId} code only. Do not add comments or explanations.\n` 
 			: '';
 
 		let prefix = `\
 ${languageContext}\
 ${!combinedInstructions ? '' : `\
 // Instructions:
-// Do not output an explanation. Try to avoid outputting comments. Only output the middle code.
+// Do not output an explanation. Do not output comments. Only output the middle code.
 ${combinedInstructions.split('\n').map(line => `//${line}`).join('\n')}`}
 
 ${messages.prefix}`

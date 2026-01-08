@@ -237,6 +237,20 @@ const filterNonCodeContent = (text: string, languageId?: string): string => {
 	const filteredLines: string[] = [];
 
 	for (const line of lines) {
+		// Remove Chinese/Japanese/Korean characters from comments (common issue)
+		// Pattern: code followed by // or /* with non-ASCII characters
+		const hasNonAsciiInComment = /\/\/.*[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(line) || 
+		                              /\/\*.*[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af].*\*\//.test(line);
+		
+		if (hasNonAsciiInComment) {
+			// Remove the comment part, keep only the code
+			const codeOnly = line.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\//g, '').trim();
+			if (codeOnly) {
+				filteredLines.push(codeOnly);
+			}
+			continue;
+		}
+
 		// Skip lines that are mostly non-ASCII characters (likely explanations)
 		// But allow if it's clearly code (has operators, brackets, etc.)
 		const nonAsciiRatio = (line.match(/[^\x00-\x7F]/g) || []).length / Math.max(line.length, 1);
@@ -945,7 +959,7 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 
 			// Get language ID to pass to FIM preparation (proper fix - tells model what language to generate)
 			const languageId = model.getLanguageId();
-			
+
 			const requestId = this._llmMessageService.sendLLMMessage({
 				messagesType: 'FIMMessage',
 				messages: this._convertToLLMMessageService.prepareFIMMessage({
