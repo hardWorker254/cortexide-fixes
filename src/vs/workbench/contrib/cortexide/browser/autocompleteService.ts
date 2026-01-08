@@ -943,6 +943,9 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 		// set parameters of `newAutocompletion` appropriately
 		newAutocompletion.llmPromise = new Promise((resolve, reject) => {
 
+			// Get language ID to pass to FIM preparation (proper fix - tells model what language to generate)
+			const languageId = model.getLanguageId();
+			
 			const requestId = this._llmMessageService.sendLLMMessage({
 				messagesType: 'FIMMessage',
 				messages: this._convertToLLMMessageService.prepareFIMMessage({
@@ -953,6 +956,7 @@ export class AutocompleteService extends Disposable implements IAutocompleteServ
 					},
 					modelSelection,
 					featureName,
+					languageId, // Pass language to help model generate correct code
 				}),
 				modelSelection,
 				modelSelectionOptions,

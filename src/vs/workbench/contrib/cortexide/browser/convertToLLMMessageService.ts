@@ -1220,7 +1220,7 @@ export interface IConvertToLLMMessageService {
 	readonly _serviceBrand: undefined;
 	prepareLLMSimpleMessages: (opts: { simpleMessages: SimpleLLMMessage[], systemMessage: string, modelSelection: ModelSelection | null, featureName: FeatureName }) => { messages: LLMChatMessage[], separateSystemMessage: string | undefined }
 	prepareLLMChatMessages: (opts: { chatMessages: ChatMessage[], chatMode: ChatMode, modelSelection: ModelSelection | null, repoIndexerPromise?: Promise<{ results: string[], metrics: any } | null> }) => Promise<{ messages: LLMChatMessage[], separateSystemMessage: string | undefined }>
-	prepareFIMMessage(opts: { messages: LLMFIMMessage, modelSelection: ModelSelection | null, featureName: FeatureName }): { prefix: string, suffix: string, stopTokens: string[] }
+	prepareFIMMessage(opts: { messages: LLMFIMMessage, modelSelection: ModelSelection | null, featureName: FeatureName, languageId?: string }): { prefix: string, suffix: string, stopTokens: string[] }
 	startRepoIndexerQuery: (chatMessages: ChatMessage[], chatMode: ChatMode) => Promise<{ results: string[], metrics: any } | null>
 }
 
@@ -1740,7 +1740,7 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 
 	// --- FIM ---
 
-	prepareFIMMessage: IConvertToLLMMessageService['prepareFIMMessage'] = ({ messages, modelSelection, featureName }) => {
+	prepareFIMMessage: IConvertToLLMMessageService['prepareFIMMessage'] = ({ messages, modelSelection, featureName, languageId }) => {
 		const { settingsOfProvider } = this.cortexideSettingsService.state
 
 		// Detect if local provider for optimizations
@@ -1751,7 +1751,14 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 			? '' // Skip verbose AI instructions for local autocomplete
 			: this._getCombinedAIInstructions();
 
+		// Add language context to help model generate correct language code
+		// This is the PROPER fix - tell the model what language it's completing
+		const languageContext = languageId && featureName === 'Autocomplete' 
+			? `// Language: ${languageId}\n` 
+			: '';
+
 		let prefix = `\
+${languageContext}\
 ${!combinedInstructions ? '' : `\
 // Instructions:
 // Do not output an explanation. Try to avoid outputting comments. Only output the middle code.
