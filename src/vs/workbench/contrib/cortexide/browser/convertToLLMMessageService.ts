@@ -1754,8 +1754,8 @@ class ConvertToLLMMessageService extends Disposable implements IConvertToLLMMess
 		// Add language context to help model generate correct language code
 		// This is the PROPER fix - tell the model what language it's completing
 		// Make it explicit and strong to prevent wrong language or explanatory comments
-		const languageContext = languageId && featureName === 'Autocomplete' 
-			? `// Language: ${languageId}\n// Generate ${languageId} code only. Do not add comments or explanations.\n` 
+		const languageContext = languageId && featureName === 'Autocomplete'
+			? `// Language: ${languageId}\n// Generate ${languageId} code only. Do not add comments or explanations.\n`
 			: '';
 
 		let prefix = `\

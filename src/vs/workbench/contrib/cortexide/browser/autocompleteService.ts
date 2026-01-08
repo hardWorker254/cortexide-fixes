@@ -239,9 +239,9 @@ const filterNonCodeContent = (text: string, languageId?: string): string => {
 	for (const line of lines) {
 		// Remove Chinese/Japanese/Korean characters from comments (common issue)
 		// Pattern: code followed by // or /* with non-ASCII characters
-		const hasNonAsciiInComment = /\/\/.*[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(line) || 
+		const hasNonAsciiInComment = /\/\/.*[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(line) ||
 		                              /\/\*.*[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af].*\*\//.test(line);
-		
+
 		if (hasNonAsciiInComment) {
 			// Remove the comment part, keep only the code
 			const codeOnly = line.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\//g, '').trim();
