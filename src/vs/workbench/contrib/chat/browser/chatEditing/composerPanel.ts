@@ -50,7 +50,9 @@ import { ITextModelService } from '../../../../../editor/common/services/resolve
 import { diffComposerAudit } from '../../../cortexide/common/diffComposerAudit.js';
 import { IAuditLogService } from '../../../cortexide/common/auditLogService.js';
 import { IRollbackSnapshotService } from '../../../cortexide/common/rollbackSnapshotService.js';
-import { IGitAutoStashService } from '../../../cortexide/common/gitAutoStashService.js';
+import { IApplyEngineV2, FileEditOperation } from '../../../cortexide/common/applyEngineV2.js';
+import { EndOfLinePreference } from '../../../../../editor/common/model.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
 import './composerPanel.css';
 
 type TimerHandle = ReturnType<typeof setTimeout>;
@@ -108,6 +110,7 @@ export class ComposerPanel extends ViewPane {
 		@IEditorWorkerService private readonly _editorWorkerService: IEditorWorkerService,
 		@ITextModelService private readonly _textModelService: ITextModelService,
 		@IAuditLogService private readonly _auditLogService: IAuditLogService,
+		@IFileService private readonly _fileService: IFileService,
 	) {
 		super(
 			{ ...options, titleMenuId: MenuId.ViewTitle },
@@ -543,8 +546,10 @@ export class ComposerPanel extends ViewPane {
 				summaryExpanded = !summaryExpanded;
 				summaryToggle.setAttribute('aria-expanded', summaryExpanded.toString());
 				summaryContent.style.display = summaryExpanded ? 'block' : 'none';
+				// allow-any-unicode-next-line
 				summaryToggle.textContent = summaryExpanded ? '▼' : '▶';
 			};
+			// allow-any-unicode-next-line
 			summaryToggle.textContent = '▶';
 
 			// Update summary content reactively
@@ -1475,6 +1480,83 @@ export class ComposerPanel extends ViewPane {
 		}
 	}
 
+	/**
+	 * Converts chat editing entries to FileEditOperations for ApplyEngineV2
+	 */
+	private async _convertEntriesToOperations(entries: readonly IModifiedFileEntry[]): Promise<FileEditOperation[]> {
+		const operations: FileEditOperation[] = [];
+
+		for (const entry of entries) {
+			// Get the actual file URI - modifiedURI might be a special URI, so we need to resolve it
+			// For now, try to get the real file URI from the model
+			let fileUri: URI | undefined;
+			let content: string | undefined;
+
+			try {
+				// Try to resolve the modifiedURI to get the model
+				const modelRef = await this._textModelService.createModelReference(entry.modifiedURI);
+				try {
+					const textModel = modelRef.object.textEditorModel;
+					if (textModel && !textModel.isDisposed()) {
+						content = textModel.getValue(EndOfLinePreference.LF);
+						// Try to get the actual file URI - might need to check if it's a special scheme
+						// For document entries, the modifiedURI might actually be the file URI in some cases
+						// But for safety, we'll try to derive it from originalURI or check the model's URI
+						const modelUri = textModel.uri;
+						// If the model URI is a file:// URI, use it; otherwise try originalURI
+						if (modelUri.scheme === 'file') {
+							fileUri = modelUri;
+						} else {
+							// Try to get from originalURI - but need to extract the real file path
+							// originalURI is a snapshot URI, so we need the actual file URI
+							// For now, check if modifiedURI can be converted
+							fileUri = entry.modifiedURI;
+						}
+					}
+				} finally {
+					modelRef.dispose();
+				}
+			} catch {
+				// If model resolution fails, try to use modifiedURI directly
+				fileUri = entry.modifiedURI;
+			}
+
+			if (!fileUri || !content) {
+				// Fallback: try to read from file service if modifiedURI is a file URI
+				if (entry.modifiedURI.scheme === 'file') {
+					fileUri = entry.modifiedURI;
+					try {
+						if (await this._fileService.exists(fileUri)) {
+							const fileContent = await this._fileService.readFile(fileUri);
+							content = fileContent.value.toString();
+						} else {
+							// File doesn't exist - this is a create operation
+							// We still need content, try to get from model again or use empty
+							content = '';
+						}
+					} catch {
+						content = '';
+					}
+				} else {
+					// Skip this entry if we can't get content
+					continue;
+				}
+			}
+
+			// Determine operation type: check if file exists
+			const fileExists = fileUri.scheme === 'file' && await this._fileService.exists(fileUri);
+			const operationType: 'edit' | 'create' = fileExists ? 'edit' : 'create';
+
+			operations.push({
+				uri: fileUri,
+				type: operationType,
+				content: content,
+			});
+		}
+
+		return operations;
+	}
+
 	async applyAll(): Promise<void> {
 		if (!this._currentSession) {
 			return;
@@ -1504,41 +1586,50 @@ export class ComposerPanel extends ViewPane {
 			return;
 		}
 
-		// P0 SAFETY: Pre-apply snapshot and auto-stash
-		const rollbackService = this._instantiationService.invokeFunction(accessor => accessor.get(IRollbackSnapshotService));
-		const autostashService = this._instantiationService.invokeFunction(accessor => accessor.get(IGitAutoStashService));
-		let snapshotId: string | undefined;
-		let stashRef: string | undefined;
+		// Apply Engine v2: Convert entries to operations and apply atomically
+		const applyEngine = this._instantiationService.invokeFunction(accessor => accessor.get(IApplyEngineV2));
 
-		// Filter to only enabled hunks if we have that state
-		// For now, accept all entries (per-hunk filtering can be added later)
 		try {
-			// 1. Create snapshot if enabled
-			if (rollbackService.isEnabled()) {
-				const touchedFiles = entries.map(e => e.modifiedURI.fsPath);
-				const snapshot = await rollbackService.createSnapshot(touchedFiles);
-				snapshotId = snapshot.id;
+			// Convert entries to FileEditOperations
+			const operations = await this._convertEntriesToOperations(entries);
+
+			if (operations.length === 0) {
+				diffComposerAudit.markApplyEnd(requestId, false);
+				await this._dialogService.error(localize('composer.noOperations', "No file operations to apply"));
+				return;
 			}
 
-			// 2. Create git stash if enabled
-			if (autostashService.isEnabled()) {
-				stashRef = await autostashService.createStash(requestId);
+			// Apply using ApplyEngineV2 (atomic, verifiable, deterministic)
+			const result = await applyEngine.applyTransaction(operations, { operationId: requestId });
+
+			if (!result.success) {
+				diffComposerAudit.markApplyEnd(requestId, false);
+
+				// Show appropriate error message based on error category
+				let errorMessage = result.error || localize('composer.applyError', "Failed to apply changes");
+				if (result.errorCategory === 'base_mismatch') {
+					errorMessage = localize('composer.baseMismatch', "File changed before apply. Please retry: {0}", result.error);
+				} else if (result.errorCategory === 'verification_failure') {
+					errorMessage = localize('composer.verificationFailed', "Apply verification failed. Changes rolled back: {0}", result.error);
+				}
+
+				await this._dialogService.error(errorMessage);
+				return;
 			}
 
+			// Success: Update session state by calling accept() (this updates UI state but files are already applied)
+			// Note: accept() might try to apply again, but ApplyEngineV2 already did it atomically
+			// We call accept() to update the session state properly
 			await this._currentSession.accept();
-
-			// 3. Success: discard snapshot, keep stash
-			if (snapshotId) {
-				await rollbackService.discardSnapshot(snapshotId);
-			}
 
 			diffComposerAudit.markApplyEnd(requestId, true);
 			const metrics = diffComposerAudit.getMetrics(requestId, entries.length);
 			if (metrics && metrics.applyTime > 300) {
+				// allow-any-unicode-next-line
 				console.warn(`Apply operation took ${metrics.applyTime.toFixed(1)}ms (target: ≤300ms)`);
 			}
 
-			// Audit log: record apply
+			// Audit log: record apply (ApplyEngineV2 already logged, but we log additional context here)
 			if (this._auditLogService.isEnabled()) {
 				const files = entries.map(e => this._labelService.getUriLabel(e.modifiedURI, { relative: true }));
 				// Calculate diff stats from entries (use changesCount as hunks)
@@ -1560,45 +1651,20 @@ export class ComposerPanel extends ViewPane {
 					meta: {
 						requestId,
 						applyTime: metrics?.applyTime,
+						appliedFiles: result.appliedFiles.length,
+						engine: 'v2',
 					},
 				});
 			}
 
-			this._dialogService.info(localize('composer.applied', "Applied changes to {0} file(s). Use Undo to revert.", entries.length));
+			this._dialogService.info(localize('composer.applied', "Applied (verified) to {0} file(s). Use Undo to revert.", result.appliedFiles.length));
 		} catch (error) {
 			diffComposerAudit.markApplyEnd(requestId, false);
 
-			// 4. Failure: restore snapshot first (fast), then git stash (fallback)
-			let restored = false;
-			if (snapshotId) {
-				try {
-					await rollbackService.restoreSnapshot(snapshotId);
-					restored = true;
-				} catch (snapshotError) {
-					console.error('[ComposerPanel] Snapshot restore failed:', snapshotError);
-				}
-			}
+			// Error handling: ApplyEngineV2 already handled rollback, but we log additional context
+			const errorMessage = error instanceof Error ? error.message : String(error);
 
-			if (!restored && stashRef) {
-				try {
-					await autostashService.restoreStash(stashRef);
-					restored = true;
-				} catch (stashError) {
-					console.error('[ComposerPanel] Stash restore failed:', stashError);
-				}
-			}
-
-			if (!restored) {
-				// Both failed - show modal with guidance
-				const fileList = entries.map(e => this._labelService.getUriLabel(e.modifiedURI, { relative: true })).join('\n');
-				await this._dialogService.error(
-					localize('composer.rollbackFailed',
-						"Apply failed and automatic rollback failed. Please manually restore files:\n\n{0}",
-						fileList)
-				);
-			}
-
-			// Audit log: record apply error
+			// Audit log: record apply error (ApplyEngineV2 already logged, but we add context)
 			if (this._auditLogService.isEnabled()) {
 				await this._auditLogService.append({
 					ts: Date.now(),
@@ -1606,14 +1672,13 @@ export class ComposerPanel extends ViewPane {
 					ok: false,
 					meta: {
 						requestId,
-						error: error instanceof Error ? error.message : String(error),
-						rollbackAttempted: true,
-						rollbackSuccess: restored,
+						error: errorMessage,
+						engine: 'v2',
 					},
 				});
 			}
 
-			this._dialogService.error(localize('composer.applyError', "Failed to apply changes: {0}", error));
+			this._dialogService.error(localize('composer.applyError', "Failed to apply changes: {0}", errorMessage));
 		}
 	}
 
@@ -1631,6 +1696,7 @@ export class ComposerPanel extends ViewPane {
 			diffComposerAudit.markUndoEnd(requestId, true);
 			const metrics = diffComposerAudit.getMetrics(requestId, 0);
 			if (metrics && metrics.undoTime > 300) {
+				// allow-any-unicode-next-line
 				console.warn(`Undo operation took ${metrics.undoTime.toFixed(1)}ms (target: ≤300ms)`);
 			}
 

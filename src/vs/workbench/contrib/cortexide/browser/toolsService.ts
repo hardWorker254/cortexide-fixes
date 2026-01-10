@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright 2025 Glass Devtools, Inc. All rights reserved.
+ *  Licensed under the Apache License, Version 2.0. See LICENSE.txt for more information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { CancellationToken } from '../../../../base/common/cancellation.js'
 import { URI } from '../../../../base/common/uri.js'
 import { joinPath } from '../../../../base/common/resources.js'
@@ -29,6 +34,7 @@ import { LRUCache } from '../../../../base/common/map.js'
 import { OfflinePrivacyGate } from '../common/offlinePrivacyGate.js'
 import { INLShellParserService } from '../common/nlShellParserService.js'
 import { ISecretDetectionService } from '../common/secretDetectionService.js'
+import { IEditorService } from '../../../services/editor/common/editorService.js'
 
 
 // tool use for AI
@@ -211,6 +217,7 @@ export class ToolsService implements IToolsService {
 		@IRepoIndexerService private readonly repoIndexerService: IRepoIndexerService,
 		@INLShellParserService private readonly nlShellParserService: INLShellParserService,
 		@ISecretDetectionService private readonly secretDetectionService: ISecretDetectionService,
+		@IEditorService private readonly editorService: IEditorService,
 	) {
 		this._offlineGate = new OfflinePrivacyGate();
 		const queryBuilder = instantiationService.createInstance(QueryBuilder);
@@ -282,6 +289,14 @@ export class ToolsService implements IToolsService {
 			},
 
 			read_lint_errors: (params: RawToolParamsObj) => {
+				const {
+					uri: uriUnknown,
+				} = params
+				const uri = validateURI(uriUnknown, workspaceContextService, true)
+				return { uri }
+			},
+
+			open_file: (params: RawToolParamsObj) => {
 				const {
 					uri: uriUnknown,
 				} = params
@@ -549,6 +564,20 @@ export class ToolsService implements IToolsService {
 				await timeout(1000)
 				const { lintErrors } = this._getLintErrors(uri)
 				return { result: { lintErrors } }
+			},
+
+			open_file: async ({ uri }) => {
+				// Verify file exists
+				const exists = await fileService.exists(uri)
+				if (!exists) {
+					throw new Error(`File does not exist: ${uri.fsPath}`)
+				}
+				// Open the file in the editor
+				await this.editorService.openEditor({
+					resource: uri,
+					options: { pinned: false }
+				})
+				return { result: {} }
 			},
 
 			// ---
@@ -1081,6 +1110,9 @@ export class ToolsService implements IToolsService {
 				return result.lintErrors ?
 					stringifyLintErrors(result.lintErrors)
 					: 'No lint errors found.'
+			},
+			open_file: (params, _result) => {
+				return `File ${params.uri.fsPath} opened in editor.`
 			},
 			// ---
 			create_file_or_folder: (params, result) => {

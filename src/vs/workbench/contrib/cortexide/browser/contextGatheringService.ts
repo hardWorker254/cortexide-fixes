@@ -78,8 +78,15 @@ class ContextGatheringService extends Disposable implements IContextGatheringSer
 
 	// Basic snippet extraction.
 	private _getSnippetForRange(model: ITextModel, range: IRange, numLines: number): string {
-		const startLine = Math.max(range.startLineNumber - numLines, 1);
-		const endLine = Math.min(range.endLineNumber + numLines, model.getLineCount());
+		// Validate line numbers to prevent "Illegal value for lineNumber" errors
+		const lineCount = model.getLineCount();
+		const validStartLine = Math.max(1, Math.min(range.startLineNumber, lineCount));
+		const validEndLine = Math.max(1, Math.min(range.endLineNumber, lineCount));
+		if (validStartLine < 1 || validEndLine < 1 || validStartLine > lineCount || validEndLine > lineCount) {
+			return '';
+		}
+		const startLine = Math.max(validStartLine - numLines, 1);
+		const endLine = Math.min(validEndLine + numLines, lineCount);
 
 		// Enforce maximum snippet size
 		const totalLines = endLine - startLine + 1;
@@ -234,7 +241,13 @@ class ContextGatheringService extends Disposable implements IContextGatheringSer
 		}
 		// Also check reference providers.
 		const refProviders = this._langFeaturesService.referenceProvider.ordered(model);
-		for (let line = range.startLineNumber; line <= range.endLineNumber; line++) {
+		const lineCount = model.getLineCount();
+		// Validate line numbers to prevent "Illegal value for lineNumber" errors
+		const startLine = Math.max(1, Math.min(range.startLineNumber, lineCount));
+		const endLine = Math.max(1, Math.min(range.endLineNumber, lineCount));
+		for (let line = startLine; line <= endLine; line++) {
+			// Double-check line is valid before accessing
+			if (line < 1 || line > lineCount) continue;
 			const content = model.getLineContent(line);
 			const words = content.match(/[a-zA-Z_]\w*/g) || [];
 			for (const word of words) {
@@ -323,10 +336,15 @@ class ContextGatheringService extends Disposable implements IContextGatheringSer
 	}
 
 	private async _findContainerFunction(model: ITextModel, pos: Position): Promise<DocumentSymbol | null> {
+		// Validate position to prevent "Illegal value for lineNumber" errors
+		const lineCount = model.getLineCount();
+		const validLineNumber = Math.max(1, Math.min(pos.lineNumber, lineCount));
+		if (validLineNumber < 1 || validLineNumber > lineCount) return null;
+
 		const searchRange = new Range(
-			Math.max(pos.lineNumber - 1, 1), 1,
-			Math.min(pos.lineNumber + 1, model.getLineCount()),
-			model.getLineMaxColumn(pos.lineNumber)
+			Math.max(validLineNumber - 1, 1), 1,
+			Math.min(validLineNumber + 1, lineCount),
+			model.getLineMaxColumn(validLineNumber)
 		);
 		const symbols = await this._getSymbolsInRange(model, searchRange);
 		const funcs = symbols.filter(s =>

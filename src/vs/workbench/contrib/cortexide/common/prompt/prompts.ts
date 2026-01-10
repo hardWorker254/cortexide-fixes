@@ -253,6 +253,14 @@ export const builtinTools: {
 		},
 	},
 
+	open_file: {
+		name: 'open_file',
+		description: `Opens a file in the editor. Use this when the user asks to "open" a file.`,
+		params: {
+			...uriParam('file'),
+		},
+	},
+
 	// --- editing (create/delete) ---
 
 	create_file_or_folder: {

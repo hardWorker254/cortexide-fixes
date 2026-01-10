@@ -336,16 +336,9 @@ const _sendOpenAICompatibleFIM = async ({ messages: { prefix, suffix, stopTokens
 		additionalOpenAIPayload,
 	} = getModelCapabilities(providerName, modelName_, overridesOfModel)
 
-	if (!supportsFIM) {
-		if (modelName === modelName_)
-			onError({ message: `Model ${modelName} does not support FIM.`, fullError: null })
-		else
-			onError({ message: `Model ${modelName_} (${modelName}) does not support FIM.`, fullError: null })
-		return
-	}
-
 	// Detect if this is a local provider for streaming optimization
-	const isExplicitLocalProvider = providerName === 'ollama' || providerName === 'vLLM' || providerName === 'lmStudio'
+	// Note: vLLM and lmStudio don't support FIM, so we only check for ollama here
+	const isExplicitLocalProvider = providerName === 'ollama'
 	let isLocalhostEndpoint = false
 	if (providerName === 'openAICompatible' || providerName === 'liteLLM') {
 		const endpoint = settingsOfProvider[providerName]?.endpoint || ''
@@ -362,6 +355,25 @@ const _sendOpenAICompatibleFIM = async ({ messages: { prefix, suffix, stopTokens
 		}
 	}
 	const isLocalProvider = isExplicitLocalProvider || isLocalhostEndpoint
+
+	// Check FIM support - only allow if model explicitly supports it OR if it's a provider that supports FIM
+	// Providers with FIM support (that use this function):
+	// - openRouter: May support FIM depending on backend model
+	// - openAICompatible: May support FIM if backend supports it (e.g., local servers)
+	// - liteLLM: May support FIM depending on backend
+	// Note: mistral and ollama have their own FIM implementations (not this function)
+	// Note: OpenAI's official API does NOT support suffix parameter (except gpt-3.5-turbo-instruct)
+	// Note: vLLM and lmStudio do NOT support suffix parameter
+	const providersWithFIMSupport = ['openRouter', 'openAICompatible', 'liteLLM']
+	const hasFIMSupport = providersWithFIMSupport.includes(providerName) || isLocalhostEndpoint
+
+	if (!supportsFIM && !hasFIMSupport) {
+		if (modelName === modelName_)
+			onError({ message: `Model ${modelName} does not support FIM. OpenAI's official API does not support FIM. Try Mistral (codestral) or local models (Ollama qwen2.5-coder).`, fullError: null })
+		else
+			onError({ message: `Model ${modelName_} (${modelName}) does not support FIM. OpenAI's official API does not support FIM. Try Mistral (codestral) or local models (Ollama qwen2.5-coder).`, fullError: null })
+		return
+	}
 
 	const openai = await getOpenAICompatibleClient({ providerName, settingsOfProvider, includeInPayload: additionalOpenAIPayload })
 
@@ -1446,12 +1458,12 @@ export const sendLLMMessageToProviderImplementation = {
 	},
 	openAI: {
 		sendChat: (params) => _sendOpenAICompatibleChat(params),
-		sendFIM: null,
+		sendFIM: null, // OpenAI's official API doesn't support suffix parameter for FIM
 		list: null,
 	},
 	xAI: {
 		sendChat: (params) => _sendOpenAICompatibleChat(params),
-		sendFIM: null,
+		sendFIM: null, // xAI uses OpenAI-compatible API which doesn't support suffix parameter
 		list: null,
 	},
 	gemini: {
@@ -1481,12 +1493,12 @@ export const sendLLMMessageToProviderImplementation = {
 	},
 	vLLM: {
 		sendChat: (params) => _sendOpenAICompatibleChat(params),
-		sendFIM: (params) => _sendOpenAICompatibleFIM(params),
+		sendFIM: null, // vLLM's OpenAI-compatible server does not support suffix parameter according to docs
 		list: (params) => _openaiCompatibleList(params),
 	},
 	deepseek: {
 		sendChat: (params) => _sendOpenAICompatibleChat(params),
-		sendFIM: null,
+		sendFIM: null, // DeepSeek uses OpenAI-compatible API which doesn't support suffix parameter
 		list: null,
 	},
 	groq: {
@@ -1496,9 +1508,8 @@ export const sendLLMMessageToProviderImplementation = {
 	},
 
 	lmStudio: {
-		// lmStudio has no suffix parameter in /completions, so sendFIM might not work
 		sendChat: (params) => _sendOpenAICompatibleChat(params),
-		sendFIM: (params) => _sendOpenAICompatibleFIM(params),
+		sendFIM: null, // lmStudio has no suffix parameter in /completions endpoint, so FIM does not work
 		list: (params) => _openaiCompatibleList(params),
 	},
 	liteLLM: {

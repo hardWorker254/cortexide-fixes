@@ -180,7 +180,7 @@ Provide your review annotations as a JSON array:`;
 				settings.modelSelectionOfFeature['Chat'] || { providerName: 'auto', modelName: 'auto' }
 			);
 
-			if (!modelSelection) {
+			if (!modelSelection || modelSelection.providerName === 'auto') {
 				return {
 					uri,
 					annotations: [],
