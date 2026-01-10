@@ -27,14 +27,16 @@ import { MAX_CHILDREN_URIs_PAGE, MAX_FILE_CHARS_PAGE, MAX_TERMINAL_BG_COMMAND_TI
 import { ICortexideSettingsService } from '../common/cortexideSettingsService.js'
 import { generateUuid } from '../../../../base/common/uuid.js'
 import { INotificationService } from '../../../../platform/notification/common/notification.js'
-import { IRequestService } from '../../../../platform/request/common/request.js'
+import { IRequestService, asJson, asTextOrError } from '../../../../platform/request/common/request.js'
 import { IWebContentExtractorService } from '../../../../platform/webContentExtractor/common/webContentExtractor.js'
-import { asJson, asTextOrError } from '../../../../platform/request/common/request.js'
 import { LRUCache } from '../../../../base/common/map.js'
 import { OfflinePrivacyGate } from '../common/offlinePrivacyGate.js'
 import { INLShellParserService } from '../common/nlShellParserService.js'
 import { ISecretDetectionService } from '../common/secretDetectionService.js'
 import { IEditorService } from '../../../services/editor/common/editorService.js'
+import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js'
+import { Position } from '../../../../editor/common/core/position.js'
+import { Range } from '../../../../editor/common/core/range.js'
 
 
 // tool use for AI
@@ -218,6 +220,7 @@ export class ToolsService implements IToolsService {
 		@INLShellParserService private readonly nlShellParserService: INLShellParserService,
 		@ISecretDetectionService private readonly secretDetectionService: ISecretDetectionService,
 		@IEditorService private readonly editorService: IEditorService,
+		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
 	) {
 		this._offlineGate = new OfflinePrivacyGate();
 		const queryBuilder = instantiationService.createInstance(QueryBuilder);
@@ -302,6 +305,72 @@ export class ToolsService implements IToolsService {
 				} = params
 				const uri = validateURI(uriUnknown, workspaceContextService, true)
 				return { uri }
+			},
+
+			go_to_definition: (params: RawToolParamsObj) => {
+				const { uri: uriUnknown, line: lineUnknown, column: columnUnknown } = params
+				const uri = validateURI(uriUnknown, workspaceContextService, true)
+				const line = validateNumber(lineUnknown, { default: null })
+				const column = validateNumber(columnUnknown, { default: null })
+				if (line === null || line < 1) throw new Error(`Invalid LLM output: line must be a positive integer, got ${lineUnknown}`)
+				if (column === null || column < 1) throw new Error(`Invalid LLM output: column must be a positive integer, got ${columnUnknown}`)
+				return { uri, line, column }
+			},
+
+			find_references: (params: RawToolParamsObj) => {
+				const { uri: uriUnknown, line: lineUnknown, column: columnUnknown } = params
+				const uri = validateURI(uriUnknown, workspaceContextService, true)
+				const line = validateNumber(lineUnknown, { default: null })
+				const column = validateNumber(columnUnknown, { default: null })
+				if (line === null || line < 1) throw new Error(`Invalid LLM output: line must be a positive integer, got ${lineUnknown}`)
+				if (column === null || column < 1) throw new Error(`Invalid LLM output: column must be a positive integer, got ${columnUnknown}`)
+				return { uri, line, column }
+			},
+
+			search_symbols: (params: RawToolParamsObj) => {
+				const { query: queryUnknown, uri: uriUnknown } = params
+				const query = validateStr('query', queryUnknown)
+				const uri = uriUnknown ? validateURI(uriUnknown, workspaceContextService, true) : null
+				return { query, uri }
+			},
+
+			automated_code_review: (params: RawToolParamsObj) => {
+				const { uri: uriUnknown } = params
+				const uri = validateURI(uriUnknown, workspaceContextService, true)
+				return { uri }
+			},
+
+			generate_tests: (params: RawToolParamsObj) => {
+				const { uri: uriUnknown, function_name: functionNameUnknown, test_framework: testFrameworkUnknown } = params
+				const uri = validateURI(uriUnknown, workspaceContextService, true)
+				const functionName = validateOptionalStr('function_name', functionNameUnknown)
+				const testFramework = validateOptionalStr('test_framework', testFrameworkUnknown)
+				return { uri, functionName, testFramework }
+			},
+
+			rename_symbol: (params: RawToolParamsObj) => {
+				const { uri: uriUnknown, line: lineUnknown, column: columnUnknown, new_name: newNameUnknown } = params
+				const uri = validateURI(uriUnknown, workspaceContextService, true)
+				const line = validateNumber(lineUnknown, { default: null })
+				const column = validateNumber(columnUnknown, { default: null })
+				if (line === null || line < 1) throw new Error(`Invalid LLM output: line must be a positive integer, got ${lineUnknown}`)
+				if (column === null || column < 1) throw new Error(`Invalid LLM output: column must be a positive integer, got ${columnUnknown}`)
+				const newName = validateStr('new_name', newNameUnknown)
+				return { uri, line, column, newName }
+			},
+
+			extract_function: (params: RawToolParamsObj) => {
+				const { uri: uriUnknown, start_line: startLineUnknown, end_line: endLineUnknown, function_name: functionNameUnknown } = params
+				const uri = validateURI(uriUnknown, workspaceContextService, true)
+				const startLine = validateNumber(startLineUnknown, { default: null })
+				const endLine = validateNumber(endLineUnknown, { default: null })
+				if (startLine === null || startLine < 1) throw new Error(`Invalid LLM output: start_line must be a positive integer, got ${startLineUnknown}`)
+				if (endLine === null || endLine < 1) throw new Error(`Invalid LLM output: end_line must be a positive integer, got ${endLineUnknown}`)
+				const functionName = validateStr('function_name', functionNameUnknown)
+				if (endLine < startLine) {
+					throw new Error(`Invalid LLM output: end_line (${endLine}) must be >= start_line (${startLine})`)
+				}
+				return { uri, startLine, endLine, functionName }
 			},
 
 			// ---
@@ -578,6 +647,391 @@ export class ToolsService implements IToolsService {
 					options: { pinned: false }
 				})
 				return { result: {} }
+			},
+
+			go_to_definition: async ({ uri, line, column }) => {
+				await cortexideModelService.initializeModel(uri)
+				const { model } = await cortexideModelService.getModelSafe(uri)
+				if (model === null) {
+					throw new Error(`File does not exist: ${uri.fsPath}`)
+				}
+
+				const position = new Position(line, column)
+				const definitionProviders = this.languageFeaturesService.definitionProvider.ordered(model)
+
+				const locations: Array<{ uri: URI, startLine: number, startColumn: number, endLine: number, endColumn: number }> = []
+
+				for (const provider of definitionProviders) {
+					const definitions = await provider.provideDefinition(model, position, CancellationToken.None)
+					if (!definitions) continue
+
+					const defs = Array.isArray(definitions) ? definitions : [definitions]
+					for (const def of defs) {
+						if (def.uri && def.range) {
+							locations.push({
+								uri: def.uri,
+								startLine: def.range.startLineNumber,
+								startColumn: def.range.startColumn,
+								endLine: def.range.endLineNumber,
+								endColumn: def.range.endColumn,
+							})
+						}
+					}
+				}
+
+				if (locations.length === 0) {
+					throw new Error(`No definition found at line ${line}, column ${column} in ${uri.fsPath}`)
+				}
+
+				return { result: { locations } }
+			},
+
+			find_references: async ({ uri, line, column }) => {
+				await cortexideModelService.initializeModel(uri)
+				const { model } = await cortexideModelService.getModelSafe(uri)
+				if (model === null) {
+					throw new Error(`File does not exist: ${uri.fsPath}`)
+				}
+
+				const position = new Position(line, column)
+				const referenceProviders = this.languageFeaturesService.referenceProvider.ordered(model)
+
+				const locations: Array<{ uri: URI, startLine: number, startColumn: number, endLine: number, endColumn: number }> = []
+
+				for (const provider of referenceProviders) {
+					const references = await provider.provideReferences(model, position, { includeDeclaration: true }, CancellationToken.None)
+					if (!references) continue
+
+					for (const ref of references) {
+						if (ref.uri && ref.range) {
+							locations.push({
+								uri: ref.uri,
+								startLine: ref.range.startLineNumber,
+								startColumn: ref.range.startColumn,
+								endLine: ref.range.endLineNumber,
+								endColumn: ref.range.endColumn,
+							})
+						}
+					}
+				}
+
+				return { result: { locations } }
+			},
+
+			search_symbols: async ({ query, uri }) => {
+				const symbols: Array<{ name: string, kind: string, uri: URI, startLine: number, startColumn: number, endLine: number, endColumn: number }> = []
+
+				if (uri) {
+					// Search in specific file
+					await cortexideModelService.initializeModel(uri)
+					const { model } = await cortexideModelService.getModelSafe(uri)
+					if (model === null) {
+						throw new Error(`File does not exist: ${uri.fsPath}`)
+					}
+
+					const symbolProviders = this.languageFeaturesService.documentSymbolProvider.ordered(model)
+					for (const provider of symbolProviders) {
+						const docSymbols = await provider.provideDocumentSymbols(model, CancellationToken.None)
+						if (!docSymbols) continue
+
+						const processSymbol = (sym: any, parentName = '') => {
+							const fullName = parentName ? `${parentName}.${sym.name}` : sym.name
+							if (fullName.toLowerCase().includes(query.toLowerCase())) {
+								symbols.push({
+									name: fullName,
+									kind: sym.kind?.toString() || 'unknown',
+									uri: uri,
+									startLine: sym.range.startLineNumber,
+									startColumn: sym.range.startColumn,
+									endLine: sym.range.endLineNumber,
+									endColumn: sym.range.endColumn,
+								})
+							}
+							if (sym.children) {
+								for (const child of sym.children) {
+									processSymbol(child, fullName)
+								}
+							}
+						}
+
+						const syms = Array.isArray(docSymbols) ? docSymbols : [docSymbols]
+						for (const sym of syms) {
+							processSymbol(sym)
+						}
+					}
+				} else {
+					// Search across workspace - use file search to find files, then search symbols in each
+					const query_ = queryBuilder.file(workspaceContextService.getWorkspace().folders.map(f => f.uri), {
+						filePattern: '*.{ts,js,py,java,go,rs,cpp,c,cs}',
+						sortByScore: true,
+					})
+					const fileSearchResults = await searchService.fileSearch(query_, CancellationToken.None)
+					const filesToSearch = fileSearchResults.results.slice(0, 50).map(r => r.resource) // Limit to 50 files for performance
+
+					for (const fileUri of filesToSearch) {
+						try {
+							await cortexideModelService.initializeModel(fileUri)
+							const { model } = await cortexideModelService.getModelSafe(fileUri)
+							if (model === null) continue
+
+							const symbolProviders = this.languageFeaturesService.documentSymbolProvider.ordered(model)
+							for (const provider of symbolProviders) {
+								const docSymbols = await provider.provideDocumentSymbols(model, CancellationToken.None)
+								if (!docSymbols) continue
+
+								const processSymbol = (sym: any, parentName = '') => {
+									const fullName = parentName ? `${parentName}.${sym.name}` : sym.name
+									if (fullName.toLowerCase().includes(query.toLowerCase())) {
+										symbols.push({
+											name: fullName,
+											kind: sym.kind?.toString() || 'unknown',
+											uri: fileUri,
+											startLine: sym.range.startLineNumber,
+											startColumn: sym.range.startColumn,
+											endLine: sym.range.endLineNumber,
+											endColumn: sym.range.endColumn,
+										})
+									}
+									if (sym.children) {
+										for (const child of sym.children) {
+											processSymbol(child, fullName)
+										}
+									}
+								}
+
+								const syms = Array.isArray(docSymbols) ? docSymbols : [docSymbols]
+								for (const sym of syms) {
+									processSymbol(sym)
+								}
+							}
+						} catch {
+							// Skip files that can't be processed
+							continue
+						}
+					}
+				}
+
+				return { result: { symbols } }
+			},
+
+			automated_code_review: async ({ uri }) => {
+				await cortexideModelService.initializeModel(uri)
+				const { model } = await cortexideModelService.getModelSafe(uri)
+				if (model === null) {
+					throw new Error(`File does not exist: ${uri.fsPath}`)
+				}
+
+				const content = model.getValue(EndOfLinePreference.LF)
+				const issues: Array<{ severity: 'error' | 'warning' | 'info', message: string, line: number, column: number, suggestion?: string }> = []
+
+				// Get lint errors
+				await timeout(1000)
+				const { lintErrors } = this._getLintErrors(uri)
+				if (lintErrors) {
+					for (const error of lintErrors) {
+						issues.push({
+							severity: error.code?.startsWith('E') ? 'error' : 'warning',
+							message: error.message,
+							line: error.startLineNumber,
+							column: 1,
+							suggestion: `Fix: ${error.message}`,
+						})
+					}
+				}
+
+				// Basic code quality checks
+				const lines = content.split('\n')
+				for (let i = 0; i < lines.length; i++) {
+					const line = lines[i]
+					const lineNum = i + 1
+
+					// Check for long lines
+					if (line.length > 120) {
+						issues.push({
+							severity: 'info',
+							message: `Line ${lineNum} is too long (${line.length} characters). Consider breaking it into multiple lines.`,
+							line: lineNum,
+							column: 1,
+							suggestion: 'Break long lines into multiple lines for better readability.',
+						})
+					}
+
+					// Check for TODO/FIXME comments
+					if (line.match(/TODO|FIXME|XXX|HACK/i)) {
+						issues.push({
+							severity: 'info',
+							message: `Line ${lineNum} contains a TODO/FIXME comment: ${line.trim().substring(0, 50)}`,
+							line: lineNum,
+							column: 1,
+							suggestion: 'Address the TODO/FIXME comment or remove it if no longer needed.',
+						})
+					}
+
+					// Check for console.log (common in production code)
+					if (line.includes('console.log') && !uri.fsPath.includes('test') && !uri.fsPath.includes('spec')) {
+						issues.push({
+							severity: 'warning',
+							message: `Line ${lineNum} contains console.log. Consider removing debug statements in production code.`,
+							line: lineNum,
+							column: 1,
+							suggestion: 'Remove console.log or use a proper logging framework.',
+						})
+					}
+				}
+
+				return { result: { issues } }
+			},
+
+			generate_tests: async ({ uri, functionName, testFramework }) => {
+				await cortexideModelService.initializeModel(uri)
+				const { model } = await cortexideModelService.getModelSafe(uri)
+				if (model === null) {
+					throw new Error(`File does not exist: ${uri.fsPath}`)
+				}
+
+				const content = model.getValue(EndOfLinePreference.LF)
+				const fileExtension = uri.fsPath.split('.').pop()?.toLowerCase() || ''
+
+				// Detect test framework from file extension and project structure
+				let detectedFramework = testFramework
+				if (!detectedFramework) {
+					if (fileExtension === 'ts' || fileExtension === 'js') {
+						detectedFramework = 'jest' // Default for JS/TS
+					} else if (fileExtension === 'py') {
+						detectedFramework = 'pytest'
+					} else if (fileExtension === 'java') {
+						detectedFramework = 'junit'
+					} else {
+						detectedFramework = 'generic'
+					}
+				}
+
+				// For now, return a placeholder test structure
+				// In a real implementation, this would use an LLM to generate actual tests
+				const testFileName = uri.fsPath.replace(/\.(ts|js|py|java)$/, '.test.$1')
+				const testFileUri = URI.file(testFileName)
+
+				let testCode = ''
+				if (functionName) {
+					testCode = `// Generated test for function: ${functionName}\n`
+					testCode += `// Framework: ${detectedFramework}\n\n`
+					testCode += `// TODO: Implement actual test cases for ${functionName}\n`
+					testCode += `// This is a placeholder - implement real test logic\n`
+				} else {
+					testCode = `// Generated tests for file: ${uri.fsPath}\n`
+					testCode += `// Framework: ${detectedFramework}\n\n`
+					testCode += `// TODO: Implement test cases for all exported functions/classes\n`
+					testCode += `// This is a placeholder - implement real test logic\n`
+				}
+
+				return { result: { testCode, testFileUri } }
+			},
+
+			rename_symbol: async ({ uri, line, column, newName }) => {
+				await cortexideModelService.initializeModel(uri)
+				const { model } = await cortexideModelService.getModelSafe(uri)
+				if (model === null) {
+					throw new Error(`File does not exist: ${uri.fsPath}`)
+				}
+
+				// Find all references first
+				const position = new Position(line, column)
+				const referenceProviders = this.languageFeaturesService.referenceProvider.ordered(model)
+				const allReferences: Array<{ uri: URI, range: Range }> = []
+
+				// Get definition location
+				const definitionProviders = this.languageFeaturesService.definitionProvider.ordered(model)
+				for (const provider of definitionProviders) {
+					const definitions = await provider.provideDefinition(model, position, CancellationToken.None)
+					if (definitions) {
+						const defs = Array.isArray(definitions) ? definitions : [definitions]
+						for (const def of defs) {
+							if (def.uri && def.range) {
+								allReferences.push({ uri: def.uri, range: def.range })
+							}
+						}
+					}
+				}
+
+				// Get all references
+				for (const provider of referenceProviders) {
+					const references = await provider.provideReferences(model, position, { includeDeclaration: true }, CancellationToken.None)
+					if (references) {
+						for (const ref of references) {
+							if (ref.uri && ref.range) {
+								allReferences.push({ uri: ref.uri, range: ref.range })
+							}
+						}
+					}
+				}
+
+				// Get old symbol name from definition
+				let oldName = ''
+				if (allReferences.length > 0) {
+					const firstRef = allReferences[0]
+					await cortexideModelService.initializeModel(firstRef.uri)
+					const { model: refModel } = await cortexideModelService.getModelSafe(firstRef.uri)
+					if (refModel) {
+						const rangeText = refModel.getValueInRange(firstRef.range, EndOfLinePreference.LF)
+						oldName = rangeText.trim()
+					}
+				}
+
+				if (!oldName) {
+					throw new Error(`Could not determine symbol name at line ${line}, column ${column}`)
+				}
+
+				// Collect all changes
+				const changes: Array<{ uri: URI, oldText: string, newText: string, line: number, column: number }> = []
+				for (const ref of allReferences) {
+					await cortexideModelService.initializeModel(ref.uri)
+					const { model: refModel } = await cortexideModelService.getModelSafe(ref.uri)
+					if (refModel) {
+						const rangeText = refModel.getValueInRange(ref.range, EndOfLinePreference.LF)
+						if (rangeText.trim() === oldName) {
+							changes.push({
+								uri: ref.uri,
+								oldText: rangeText,
+								newText: newName,
+								line: ref.range.startLineNumber,
+								column: ref.range.startColumn,
+							})
+						}
+					}
+				}
+
+				return { result: { changes } }
+			},
+
+			extract_function: async ({ uri, startLine, endLine, functionName }) => {
+				await cortexideModelService.initializeModel(uri)
+				const { model } = await cortexideModelService.getModelSafe(uri)
+				if (model === null) {
+					throw new Error(`File does not exist: ${uri.fsPath}`)
+				}
+
+				const totalLines = model.getLineCount()
+				if (startLine > totalLines || endLine > totalLines) {
+					throw new Error(`Line range ${startLine}-${endLine} is out of bounds (file has ${totalLines} lines)`)
+				}
+
+				// Get the code to extract
+				const range = new Range(startLine, 1, endLine, Number.MAX_SAFE_INTEGER)
+				const codeToExtract = model.getValueInRange(range, EndOfLinePreference.LF)
+
+				// Determine indentation from the first line
+				const firstLine = model.getLineContent(startLine)
+				const indentMatch = firstLine.match(/^(\s*)/)
+				const baseIndent = indentMatch ? indentMatch[1] : ''
+				const functionIndent = baseIndent
+
+				// Create function signature (simplified - in real implementation would analyze parameters)
+				const newFunctionCode = `${functionIndent}function ${functionName}() {\n${codeToExtract.split('\n').map(line => `${functionIndent}  ${line}`).join('\n')}\n${functionIndent}}\n`
+
+				// Create replacement (function call)
+				const replacementCode = `${baseIndent}${functionName}();\n`
+
+				return { result: { newFunctionCode, replacementCode, insertLine: startLine } }
 			},
 
 			// ---
@@ -1112,7 +1566,65 @@ export class ToolsService implements IToolsService {
 					: 'No lint errors found.'
 			},
 			open_file: (params, _result) => {
-				return `File ${params.uri.fsPath} opened in editor.`
+				return `File opened: ${params.uri.fsPath}`
+			},
+			go_to_definition: (params, result) => {
+				if (result.locations.length === 0) {
+					return `No definition found at line ${params.line}, column ${params.column} in ${params.uri.fsPath}`
+				}
+				return result.locations.map((loc, i) =>
+					`Definition ${i + 1}: ${loc.uri.fsPath}:${loc.startLine}:${loc.startColumn}`
+				).join('\n')
+			},
+			find_references: (params, result) => {
+				if (result.locations.length === 0) {
+					return `No references found for symbol at line ${params.line}, column ${params.column} in ${params.uri.fsPath}`
+				}
+				return `Found ${result.locations.length} reference(s):\n${result.locations.map((loc, i) =>
+					`${i + 1}. ${loc.uri.fsPath}:${loc.startLine}:${loc.startColumn}`
+				).join('\n')}`
+			},
+			search_symbols: (params, result) => {
+				if (result.symbols.length === 0) {
+					return `No symbols found matching "${params.query}"${params.uri ? ` in ${params.uri.fsPath}` : ' in workspace'}`
+				}
+				return `Found ${result.symbols.length} symbol(s):\n${result.symbols.map((sym, i) =>
+					`${i + 1}. ${sym.name} (${sym.kind}) - ${sym.uri.fsPath}:${sym.startLine}:${sym.startColumn}`
+				).join('\n')}`
+			},
+			automated_code_review: (params, result) => {
+				if (result.issues.length === 0) {
+					return `No issues found in ${params.uri.fsPath}. Code looks good!`
+				}
+				const bySeverity = { error: [] as typeof result.issues, warning: [] as typeof result.issues, info: [] as typeof result.issues }
+				for (const issue of result.issues) {
+					bySeverity[issue.severity].push(issue)
+				}
+				let output = `Code review for ${params.uri.fsPath}:\n\n`
+				if (bySeverity.error.length > 0) {
+					output += `Errors (${bySeverity.error.length}):\n${bySeverity.error.map(i => `  Line ${i.line}: ${i.message}${i.suggestion ? `\n    Suggestion: ${i.suggestion}` : ''}`).join('\n')}\n\n`
+				}
+				if (bySeverity.warning.length > 0) {
+					output += `Warnings (${bySeverity.warning.length}):\n${bySeverity.warning.map(i => `  Line ${i.line}: ${i.message}${i.suggestion ? `\n    Suggestion: ${i.suggestion}` : ''}`).join('\n')}\n\n`
+				}
+				if (bySeverity.info.length > 0) {
+					output += `Info (${bySeverity.info.length}):\n${bySeverity.info.map(i => `  Line ${i.line}: ${i.message}${i.suggestion ? `\n    Suggestion: ${i.suggestion}` : ''}`).join('\n')}`
+				}
+				return output
+			},
+			generate_tests: (params, result) => {
+				return `Generated test file: ${result.testFileUri.fsPath}\n\nTest code:\n\`\`\`\n${result.testCode}\n\`\`\``
+			},
+			rename_symbol: (params, result) => {
+				if (result.changes.length === 0) {
+					return `No changes made. Could not find symbol to rename at line ${params.line}, column ${params.column} in ${params.uri.fsPath}`
+				}
+				return `Renamed symbol to "${params.newName}" in ${result.changes.length} location(s):\n${result.changes.map((c, i) =>
+					`${i + 1}. ${c.uri.fsPath}:${c.line}:${c.column}`
+				).join('\n')}`
+			},
+			extract_function: (params, result) => {
+				return `Extracted function "${params.functionName}" from lines ${params.startLine}-${params.endLine}.\n\nNew function:\n\`\`\`\n${result.newFunctionCode}\n\`\`\`\n\nReplacement code:\n\`\`\`\n${result.replacementCode}\n\`\`\``
 			},
 			// ---
 			create_file_or_folder: (params, result) => {

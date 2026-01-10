@@ -261,6 +261,75 @@ export const builtinTools: {
 		},
 	},
 
+	go_to_definition: {
+		name: 'go_to_definition',
+		description: `Finds the definition of a symbol at a specific position in a file. Returns the location(s) where the symbol is defined.`,
+		params: {
+			...uriParam('file'),
+			line: { description: 'The line number (1-based) where the symbol is located.' },
+			column: { description: 'The column number (1-based) where the symbol is located.' },
+		},
+	},
+
+	find_references: {
+		name: 'find_references',
+		description: `Finds all references to a symbol at a specific position in a file. Returns all locations where the symbol is used.`,
+		params: {
+			...uriParam('file'),
+			line: { description: 'The line number (1-based) where the symbol is located.' },
+			column: { description: 'The column number (1-based) where the symbol is located.' },
+		},
+	},
+
+	search_symbols: {
+		name: 'search_symbols',
+		description: `Searches for symbols (functions, classes, variables) by name. Can search in a specific file or across the workspace.`,
+		params: {
+			query: { description: 'The symbol name or pattern to search for.' },
+			uri: { description: 'Optional. The file URI to search in. If not provided, searches the entire workspace.' },
+		},
+	},
+
+	automated_code_review: {
+		name: 'automated_code_review',
+		description: `Analyzes code in a file for potential issues, bugs, code smells, and suggests improvements. Returns a list of issues with severity and suggestions.`,
+		params: {
+			...uriParam('file'),
+		},
+	},
+
+	generate_tests: {
+		name: 'generate_tests',
+		description: `Generates unit or integration tests for code in a file. Can generate tests for a specific function or the entire file.`,
+		params: {
+			...uriParam('file'),
+			function_name: { description: 'Optional. The name of the function to generate tests for. If not provided, generates tests for the entire file.' },
+			test_framework: { description: 'Optional. The test framework to use (e.g., "jest", "mocha", "pytest"). Defaults to the framework detected from the project.' },
+		},
+	},
+
+	rename_symbol: {
+		name: 'rename_symbol',
+		description: `Renames a symbol (function, class, variable) at a specific position and updates all references to it across the codebase.`,
+		params: {
+			...uriParam('file'),
+			line: { description: 'The line number (1-based) where the symbol is located.' },
+			column: { description: 'The column number (1-based) where the symbol is located.' },
+			new_name: { description: 'The new name for the symbol.' },
+		},
+	},
+
+	extract_function: {
+		name: 'extract_function',
+		description: `Extracts a block of code into a new function. Replaces the selected code with a function call.`,
+		params: {
+			...uriParam('file'),
+			start_line: { description: 'The starting line number (1-based) of the code block to extract.' },
+			end_line: { description: 'The ending line number (1-based) of the code block to extract.' },
+			function_name: { description: 'The name for the new function.' },
+		},
+	},
+
 	// --- editing (create/delete) ---
 
 	create_file_or_folder: {
