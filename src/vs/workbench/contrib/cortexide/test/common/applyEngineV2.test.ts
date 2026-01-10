@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright 2025 Glass Devtools, Inc. All rights reserved.
- *  Licensed under the Apache License, Version 2.0. See LICENSE.txt for more information.
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 import { suite, test } from 'mocha';
@@ -16,14 +16,13 @@ import { IRollbackSnapshotService } from '../../../common/rollbackSnapshotServic
 import { IGitAutoStashService } from '../../../common/gitAutoStashService.js';
 import { IAuditLogService } from '../../../common/auditLogService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { ILogService } from '../../../../../platform/log/common/log.js';
+import { ILogService, NullLogService } from '../../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IApplyEngineV2, FileEditOperation } from '../../../common/applyEngineV2.js';
 import { TestContextService } from '../../../../../platform/workspace/test/common/testContextService.js';
-import { NullLogService } from '../../../../../platform/log/common/log.js';
 import { TestNotificationService } from '../../../../../platform/notification/test/common/testNotificationService.js';
 import { TextModelResolverService } from '../../../../../editor/common/services/textModelResolverService.js';
-import { ModelService } from '../../../../../editor/common/services/modelService.js';
+import { IModelService, ModelService } from '../../../../../editor/common/services/modelService.js';
 import { TestConfigurationService } from '../../../../../platform/configuration/test/common/testConfigurationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { TestTextResourcePropertiesService } from '../../../../../editor/test/common/testTextResourcePropertiesService.js';
@@ -39,7 +38,7 @@ import { IUndoRedoService } from '../../../../../platform/undoRedo/common/undoRe
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { TestDialogService } from '../../../../../platform/dialogs/test/common/testDialogService.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
-import { IModelService } from '../../../../../editor/common/services/modelService.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 // Mock services
 class MockRollbackSnapshotService implements IRollbackSnapshotService {
@@ -137,6 +136,7 @@ class MockAuditLogService implements IAuditLogService {
 }
 
 suite('ApplyEngineV2', () => {
+	const testDisposables = ensureNoDisposablesAreLeakedInTestSuite();
 	let disposables: DisposableStore;
 	let instantiationService: TestInstantiationService;
 	let fileService: InMemoryTestFileService;
@@ -148,7 +148,7 @@ suite('ApplyEngineV2', () => {
 	let testWorkspaceUri: URI;
 
 	setup(async () => {
-		disposables = new DisposableStore();
+		disposables = testDisposables.add(new DisposableStore());
 		testWorkspaceUri = URI.file('/test/workspace');
 
 		// Setup file service
@@ -360,171 +360,11 @@ suite('ApplyEngineV2', () => {
 			NullLogService,
 			new TestNotificationService()
 		));
-		class ApplyEngineV2Impl {
-			declare readonly _serviceBrand: undefined;
-			constructor(
-				@IFileService private readonly _fileService: IFileService,
-				@ITextModelService private readonly _textModelService: ITextModelService,
-				@IRollbackSnapshotService private readonly _rollbackService: IRollbackSnapshotService,
-				@IGitAutoStashService private readonly _gitStashService: IGitAutoStashService,
-				@IAuditLogService private readonly _auditLogService: IAuditLogService,
-				@IWorkspaceContextService private readonly _workspaceService: IWorkspaceContextService,
-				@ILogService private readonly _logService: ILogService,
-				@INotificationService private readonly _notificationService: INotificationService,
-			) { }
-
-			async applyTransaction(operations: FileEditOperation[], options?: { operationId?: string }): Promise<any> {
-				// Import and use the actual implementation logic
-				// For now, create a minimal implementation that matches the interface
-				const operationId = options?.operationId || `apply-${Date.now()}`;
-
-				// Validate paths
-				const allUris = operations.map(op => op.uri);
-				const invalid: URI[] = [];
-				for (const uri of allUris) {
-					if (!this._workspaceService.isInsideWorkspace(uri)) {
-						invalid.push(uri);
-					}
-				}
-				if (invalid.length > 0) {
-					return {
-						success: false,
-						appliedFiles: [],
-						error: `Files outside workspace: ${invalid.map(u => u.fsPath).join(', ')}`,
-						errorCategory: 'write_failure',
-					};
-				}
-
-				// Sort operations deterministically
-				const sortedOps = [...operations].sort((a, b) => a.uri.fsPath.localeCompare(b.uri.fsPath));
-
-				// Compute base signatures
-				const baseSignatures = new Map();
-				for (const op of sortedOps) {
-					if (op.type !== 'create') {
-						try {
-							const content = await this._fileService.readFile(op.uri);
-							const normalized = content.value.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-							const encoder = new TextEncoder();
-							const data = encoder.encode(normalized);
-							const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-							const hashArray = Array.from(new Uint8Array(hashBuffer));
-							const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-							baseSignatures.set(op.uri, { uri: op.uri, hash, isDirty: false });
-						} catch (error) {
-							return {
-								success: false,
-								appliedFiles: [],
-								failedFile: op.uri,
-								error: `Failed to compute base signature for ${op.uri.fsPath}: ${error}`,
-								errorCategory: 'base_mismatch',
-							};
-						}
-					}
-				}
-
-				// Re-verify base signatures
-				for (const [uri, signature] of baseSignatures.entries()) {
-					const content = await this._fileService.readFile(uri);
-					const normalized = content.value.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-					const encoder = new TextEncoder();
-					const data = encoder.encode(normalized);
-					const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-					const hashArray = Array.from(new Uint8Array(hashBuffer));
-					const currentHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-					if (currentHash !== signature.hash) {
-						return {
-							success: false,
-							appliedFiles: [],
-							failedFile: uri,
-							error: `File ${uri.fsPath} changed between signature computation and apply`,
-							errorCategory: 'base_mismatch',
-						};
-					}
-				}
-
-				// Create snapshot
-				let snapshotId: string | undefined;
-				const touchedFiles = sortedOps.map(op => op.uri.fsPath);
-				if (this._rollbackService.isEnabled()) {
-					const snapshot = await this._rollbackService.createSnapshot(touchedFiles);
-					snapshotId = snapshot.id;
-				}
-
-				// Apply operations
-				const appliedFiles: URI[] = [];
-				try {
-					for (const op of sortedOps) {
-						if (op.type === 'create') {
-							if (!op.content) {
-								throw new Error('Create operation requires content');
-							}
-							await this._fileService.writeFile(op.uri, VSBuffer.fromString(op.content));
-							appliedFiles.push(op.uri);
-						} else if (op.type === 'edit') {
-							if (op.content) {
-								await this._fileService.writeFile(op.uri, VSBuffer.fromString(op.content));
-							} else {
-								throw new Error('Edit operation requires content');
-							}
-							appliedFiles.push(op.uri);
-						}
-					}
-
-					// Verify post-apply
-					for (const op of sortedOps) {
-						const expectedContent = op.type === 'create' ? op.content! : (op.type === 'edit' ? op.content! : '');
-						const actualContent = await this._fileService.readFile(op.uri);
-						const normalizedExpected = expectedContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-						const normalizedActual = actualContent.value.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-						if (normalizedExpected !== normalizedActual) {
-							throw new Error(`Post-apply verification failed for ${op.uri.fsPath}`);
-						}
-					}
-
-					// Success
-					if (snapshotId) {
-						await this._rollbackService.discardSnapshot(snapshotId);
-					}
-
-					return {
-						success: true,
-						appliedFiles,
-					};
-				} catch (error) {
-					// Rollback
-					if (snapshotId) {
-						try {
-							await this._rollbackService.restoreSnapshot(snapshotId);
-						} catch (snapshotError) {
-							this._logService.error('[ApplyEngineV2] Snapshot restore failed:', snapshotError);
-						}
-					}
-
-					const errorMessage = error instanceof Error ? error.message : String(error);
-					const errorCategory = errorMessage.includes('verification') ? 'verification_failure' :
-						errorMessage.includes('signature') ? 'base_mismatch' :
-							errorMessage.includes('write') || errorMessage.includes('permission') ? 'write_failure' :
-								'hunk_apply_failure';
-
-					return {
-						success: false,
-						appliedFiles: [],
-						failedFile: appliedFiles.length > 0 ? appliedFiles[appliedFiles.length - 1] : sortedOps[0]?.uri,
-						error: errorMessage,
-						errorCategory,
-					};
-				}
-			}
-		}
-		));
-
-applyEngine = disposables.add(instantiationService.createInstance(IApplyEngineV2));
 	});
 
-teardown(() => {
-	disposables.dispose();
-});
+	teardown(() => {
+		// Disposables are automatically cleaned up by ensureNoDisposablesAreLeakedInTestSuite
+	});
 
 test('atomicity: multi-file apply where file #2 fails → file #1 unchanged', async () => {
 	const file1Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file1.txt' });
