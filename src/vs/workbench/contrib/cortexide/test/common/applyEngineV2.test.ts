@@ -12,33 +12,36 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { InMemoryTestFileService } from '../../../../../workbench/test/common/workbenchTestServices.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
-import { IRollbackSnapshotService } from '../../../common/rollbackSnapshotService.js';
-import { IGitAutoStashService } from '../../../common/gitAutoStashService.js';
-import { IAuditLogService } from '../../../common/auditLogService.js';
+import { IRollbackSnapshotService } from '../../common/rollbackSnapshotService.js';
+import { IGitAutoStashService } from '../../common/gitAutoStashService.js';
+import { IAuditLogService } from '../../common/auditLogService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { ILogService, NullLogService } from '../../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { IApplyEngineV2, FileEditOperation } from '../../../common/applyEngineV2.js';
-import { TestContextService } from '../../../../../platform/workspace/test/common/testContextService.js';
+import { IApplyEngineV2, FileEditOperation } from '../../common/applyEngineV2.js';
+import { TestContextService } from '../../../../../workbench/test/common/workbenchTestServices.js';
 import { TestNotificationService } from '../../../../../platform/notification/test/common/testNotificationService.js';
-import { TextModelResolverService } from '../../../../../editor/common/services/textModelResolverService.js';
-import { IModelService, ModelService } from '../../../../../editor/common/services/modelService.js';
+import { TextModelResolverService } from '../../../../../workbench/services/textmodelResolver/common/textModelResolverService.js';
+import { IModelService } from '../../../../../editor/common/services/model.js';
+import { ModelService } from '../../../../../editor/common/services/modelService.js';
 import { TestConfigurationService } from '../../../../../platform/configuration/test/common/testConfigurationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { TestTextResourcePropertiesService } from '../../../../../editor/test/common/testTextResourcePropertiesService.js';
-import { ITextResourcePropertiesService } from '../../../../../editor/common/services/textResourcePropertiesService.js';
+import { TestTextResourcePropertiesService } from '../../../../../editor/test/common/services/testTextResourcePropertiesService.js';
+import { ITextResourcePropertiesService } from '../../../../../editor/common/services/textResourceConfiguration.js';
 import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
-import { TestLanguageConfigurationService } from '../../../../../editor/test/common/testLanguageConfigurationService.js';
+import { TestLanguageConfigurationService } from '../../../../../editor/test/common/modes/testLanguageConfigurationService.js';
 import { ILanguageConfigurationService } from '../../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
-import { ILanguageService } from '../../../../../editor/common/languages/languageService.js';
+import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { UndoRedoService } from '../../../../../platform/undoRedo/common/undoRedoService.js';
 import { IUndoRedoService } from '../../../../../platform/undoRedo/common/undoRedo.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { TestDialogService } from '../../../../../platform/dialogs/test/common/testDialogService.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { IDisposable } from '../../../../../base/common/lifecycle.js';
+import { IFileContent, IReadFileOptions } from '../../../../../platform/files/common/files.js';
 
 // Mock services
 class MockRollbackSnapshotService implements IRollbackSnapshotService {
@@ -174,13 +177,13 @@ suite('ApplyEngineV2', () => {
 			[IRollbackSnapshotService, rollbackService],
 			[IGitAutoStashService, gitStashService],
 			[IAuditLogService, auditLogService],
-			[ILogService, NullLogService],
+			[ILogService, new NullLogService()],
 			[INotificationService, new TestNotificationService()],
 			[IConfigurationService, new TestConfigurationService()],
-			[ITextResourcePropertiesService, new TestTextResourcePropertiesService()],
+			[ITextResourcePropertiesService, new TestTextResourcePropertiesService(new TestConfigurationService())],
 			[IThemeService, new TestThemeService()],
 			[ILanguageConfigurationService, new TestLanguageConfigurationService()],
-			[ILanguageService, new LanguageService()],
+			[ILanguageService, disposables.add(new LanguageService(false))],
 			[IDialogService, new TestDialogService()],
 			[IUndoRedoService, new UndoRedoService(new TestDialogService(), new TestNotificationService())],
 		)));
@@ -194,21 +197,26 @@ suite('ApplyEngineV2', () => {
 		// Create ApplyEngineV2 instance
 		// Since the class is not exported, we create a test implementation
 		// that exercises the main logic paths
-		const ApplyEngineV2TestImpl = class implements IApplyEngineV2 {
+		const ApplyEngineV2TestImpl = class implements IApplyEngineV2, IDisposable {
 			declare readonly _serviceBrand: undefined;
 			constructor(
 				private readonly _fileService: IFileService,
-				private readonly _textModelService: ITextModelService,
+				_textModelService: ITextModelService,
 				private readonly _rollbackService: IRollbackSnapshotService,
-				private readonly _gitStashService: IGitAutoStashService,
-				private readonly _auditLogService: IAuditLogService,
+				_gitStashService: IGitAutoStashService,
+				_auditLogService: IAuditLogService,
 				private readonly _workspaceService: IWorkspaceContextService,
 				private readonly _logService: ILogService,
-				private readonly _notificationService: INotificationService,
+				_notificationService: INotificationService,
 			) { }
 
+			dispose(): void {
+				// No-op for test implementation
+			}
+
 			async applyTransaction(operations: FileEditOperation[], options?: { operationId?: string }): Promise<any> {
-				const operationId = options?.operationId || `apply-${Date.now()}`;
+				// operationId is used in the logic but not needed for this test implementation
+				options?.operationId || `apply-${Date.now()}`;
 
 				// Validate paths
 				const allUris = operations.map(op => op.uri);
@@ -357,7 +365,7 @@ suite('ApplyEngineV2', () => {
 			gitStashService,
 			auditLogService,
 			workspaceService,
-			NullLogService,
+			new NullLogService(),
 			new TestNotificationService()
 		));
 	});
@@ -366,315 +374,325 @@ suite('ApplyEngineV2', () => {
 		// Disposables are automatically cleaned up by ensureNoDisposablesAreLeakedInTestSuite
 	});
 
-test('atomicity: multi-file apply where file #2 fails → file #1 unchanged', async () => {
-	const file1Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file1.txt' });
-	const file2Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file2.txt' });
+	test('atomicity: multi-file apply where file #2 fails → file #1 unchanged', async () => {
+		const file1Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file1.txt' });
+		const file2Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file2.txt' });
 
-	// Create initial files
-	await fileService.writeFile(file1Uri, VSBuffer.fromString('original content 1'));
-	await fileService.writeFile(file2Uri, VSBuffer.fromString('original content 2'));
+		// Create initial files
+		await fileService.writeFile(file1Uri, VSBuffer.fromString('original content 1'));
+		await fileService.writeFile(file2Uri, VSBuffer.fromString('original content 2'));
 
-	// Mock file service to fail on second write
-	let writeCount = 0;
-	const originalWriteFile = fileService.writeFile.bind(fileService);
-	fileService.writeFile = async (resource: URI, content: VSBuffer) => {
-		writeCount++;
-		if (writeCount === 2 && resource.toString() === file2Uri.toString()) {
-			throw new Error('Simulated write failure');
-		}
-		return originalWriteFile(resource, content);
-	};
+		// Mock file service to fail on second write
+		let writeCount = 0;
+		const originalWriteFile = fileService.writeFile.bind(fileService);
+		fileService.writeFile = async (resource: URI, content: VSBuffer) => {
+			writeCount++;
+			if (writeCount === 2 && resource.toString() === file2Uri.toString()) {
+				throw new Error('Simulated write failure');
+			}
+			return originalWriteFile(resource, content);
+		};
 
-	const operations: FileEditOperation[] = [
-		{ uri: file1Uri, type: 'edit', content: 'modified content 1' },
-		{ uri: file2Uri, type: 'edit', content: 'modified content 2' },
-	];
+		const operations: FileEditOperation[] = [
+			{ uri: file1Uri, type: 'edit', content: 'modified content 1' },
+			{ uri: file2Uri, type: 'edit', content: 'modified content 2' },
+		];
 
-	const result = await applyEngine.applyTransaction(operations);
+		const result = await applyEngine.applyTransaction(operations);
 
-	// Verify transaction failed
-	assert.strictEqual(result.success, false);
-	assert.strictEqual(result.errorCategory, 'write_failure');
+		// Verify transaction failed
+		assert.strictEqual(result.success, false);
+		assert.strictEqual(result.errorCategory, 'write_failure');
 
-	// Verify rollback was called
-	assert.strictEqual(rollbackService.getSnapshotCount(), 0, 'Snapshot should be discarded or not created');
+		// Verify rollback was called
+		assert.strictEqual(rollbackService.getSnapshotCount(), 0, 'Snapshot should be discarded or not created');
 
-	// Verify file1 was not modified (rollback occurred)
-	const file1Content = await fileService.readFile(file1Uri);
-	assert.strictEqual(file1Content.value.toString(), 'original content 1', 'File 1 should be unchanged after rollback');
-});
+		// Verify file1 was not modified (rollback occurred)
+		const file1Content = await fileService.readFile(file1Uri);
+		assert.strictEqual(file1Content.value.toString(), 'original content 1', 'File 1 should be unchanged after rollback');
+	});
 
-test('base mismatch abort: file content changed between diff generation and apply → abort + no changes', async () => {
-	const fileUri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file.txt' });
-	await fileService.writeFile(fileUri, VSBuffer.fromString('original content'));
+	test('base mismatch abort: file content changed between diff generation and apply → abort + no changes', async () => {
+		const fileUri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file.txt' });
+		await fileService.writeFile(fileUri, VSBuffer.fromString('original content'));
 
-	// Modify file externally (simulate concurrent edit) after a delay
-	// This simulates the file being changed between when the base signature is computed and when apply happens
-	setTimeout(async () => {
-		await fileService.writeFile(fileUri, VSBuffer.fromString('modified externally'));
-	}, 10);
+		// Modify file externally (simulate concurrent edit) after a delay
+		// This simulates the file being changed between when the base signature is computed and when apply happens
+		setTimeout(async () => {
+			await fileService.writeFile(fileUri, VSBuffer.fromString('modified externally'));
+		}, 10);
 
-	const operations: FileEditOperation[] = [
-		{ uri: fileUri, type: 'edit', content: 'new content' },
-	];
-
-	// Small delay to allow external modification
-	await new Promise(resolve => setTimeout(resolve, 20));
-
-	const result = await applyEngine.applyTransaction(operations);
-
-	// Verify apply was aborted due to base mismatch
-	assert.strictEqual(result.success, false);
-	assert.strictEqual(result.errorCategory, 'base_mismatch');
-
-	// Verify file was not modified by the apply operation
-	const fileContent = await fileService.readFile(fileUri);
-	// The file should either be 'original content' or 'modified externally', but not 'new content'
-	assert.ok(
-		fileContent.value.toString() !== 'new content',
-		'File should not have been modified by apply operation'
-	);
-});
-
-test('verification failure triggers rollback', async () => {
-	const fileUri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file.txt' });
-	await fileService.writeFile(fileUri, VSBuffer.fromString('original content'));
-
-	// Mock post-apply verification to fail
-	const originalReadFile = fileService.readFile.bind(fileService);
-	let readCount = 0;
-	fileService.readFile = async (resource: URI) => {
-		readCount++;
-		// After apply, return different content to simulate verification failure
-		if (readCount > 2) {
-			return VSBuffer.fromString('wrong content');
-		}
-		return originalReadFile(resource);
-	};
-
-	const operations: FileEditOperation[] = [
-		{ uri: fileUri, type: 'edit', content: 'new content' },
-	];
-
-	const result = await applyEngine.applyTransaction(operations);
-
-	// Verify transaction failed due to verification
-	assert.strictEqual(result.success, false);
-	assert.strictEqual(result.errorCategory, 'verification_failure');
-
-	// Verify rollback was attempted
-	// The file should be restored to original state
-	const finalContent = await fileService.readFile(fileUri);
-	// Note: In a real scenario, rollback would restore, but our mock doesn't fully implement it
-	// This test verifies the error category is correct
-});
-
-test('deterministic ordering: same inputs → same output hashes', async () => {
-	const file1Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/a.txt' });
-	const file2Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/b.txt' });
-	const file3Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/c.txt' });
-
-	await fileService.writeFile(file1Uri, VSBuffer.fromString('content a'));
-	await fileService.writeFile(file2Uri, VSBuffer.fromString('content b'));
-	await fileService.writeFile(file3Uri, VSBuffer.fromString('content c'));
-
-	const operations1: FileEditOperation[] = [
-		{ uri: file3Uri, type: 'edit', content: 'modified c' },
-		{ uri: file1Uri, type: 'edit', content: 'modified a' },
-		{ uri: file2Uri, type: 'edit', content: 'modified b' },
-	];
-
-	const operations2: FileEditOperation[] = [
-		{ uri: file1Uri, type: 'edit', content: 'modified a' },
-		{ uri: file2Uri, type: 'edit', content: 'modified b' },
-		{ uri: file3Uri, type: 'edit', content: 'modified c' },
-	];
-
-	// Reset files
-	await fileService.writeFile(file1Uri, VSBuffer.fromString('content a'));
-	await fileService.writeFile(file2Uri, VSBuffer.fromString('content b'));
-	await fileService.writeFile(file3Uri, VSBuffer.fromString('content c'));
-
-	const result1 = await applyEngine.applyTransaction(operations1);
-	const hash1a = await fileService.readFile(file1Uri);
-	const hash1b = await fileService.readFile(file2Uri);
-	const hash1c = await fileService.readFile(file3Uri);
-
-	// Reset files again
-	await fileService.writeFile(file1Uri, VSBuffer.fromString('content a'));
-	await fileService.writeFile(file2Uri, VSBuffer.fromString('content b'));
-	await fileService.writeFile(file3Uri, VSBuffer.fromString('content c'));
-
-	const result2 = await applyEngine.applyTransaction(operations2);
-	const hash2a = await fileService.readFile(file1Uri);
-	const hash2b = await fileService.readFile(file2Uri);
-	const hash2c = await fileService.readFile(file3Uri);
-
-	// Both should succeed
-	assert.strictEqual(result1.success, true);
-	assert.strictEqual(result2.success, true);
-
-	// Final file contents should be identical (deterministic ordering)
-	assert.strictEqual(hash1a.value.toString(), hash2a.value.toString());
-	assert.strictEqual(hash1b.value.toString(), hash2b.value.toString());
-	assert.strictEqual(hash1c.value.toString(), hash2c.value.toString());
-});
-
-test('path safety: no writes outside workspace', async () => {
-	const outsideUri = URI.file('/outside/workspace/file.txt');
-
-	const operations: FileEditOperation[] = [
-		{ uri: outsideUri, type: 'create', content: 'malicious content' },
-	];
-
-	const result = await applyEngine.applyTransaction(operations);
-
-	// Verify operation was rejected
-	assert.strictEqual(result.success, false);
-	assert.strictEqual(result.errorCategory, 'write_failure');
-	assert.ok(result.error?.includes('outside workspace'));
-
-	// Verify file was not created
-	const exists = await fileService.exists(outsideUri);
-	assert.strictEqual(exists, false, 'File outside workspace should not be created');
-});
-
-test('dirty buffer handling: uses editor content when available', async () => {
-	const fileUri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file.txt' });
-	await fileService.writeFile(fileUri, VSBuffer.fromString('disk content'));
-
-	// Create a text model with different content (simulating dirty buffer)
-	const modelService = instantiationService.get(IModelService);
-	const textModel = modelService.createModel('dirty buffer content', undefined, fileUri);
-
-	try {
-		// The apply engine should use the dirty buffer content for base signature
 		const operations: FileEditOperation[] = [
 			{ uri: fileUri, type: 'edit', content: 'new content' },
 		];
 
-		// This test verifies that the engine can handle dirty buffers
-		// The actual implementation reads from textModelService which should return the model
+		// Small delay to allow external modification
+		await new Promise(resolve => setTimeout(resolve, 20));
+
 		const result = await applyEngine.applyTransaction(operations);
 
-		// Should succeed (the exact behavior depends on implementation)
-		assert.ok(result.success !== undefined);
-	} finally {
-		textModel.dispose();
-	}
-});
+		// Verify apply was aborted due to base mismatch
+		assert.strictEqual(result.success, false);
+		assert.strictEqual(result.errorCategory, 'base_mismatch');
 
-test('line ending normalization: consistent hashing regardless of line endings', async () => {
-	const file1Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file1.txt' });
-	const file2Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file2.txt' });
+		// Verify file was not modified by the apply operation
+		const fileContent = await fileService.readFile(fileUri);
+		// The file should either be 'original content' or 'modified externally', but not 'new content'
+		assert.ok(
+			fileContent.value.toString() !== 'new content',
+			'File should not have been modified by apply operation'
+		);
+	});
 
-	// Create files with different line endings but same content
-	await fileService.writeFile(file1Uri, VSBuffer.fromString('line1\r\nline2\r\n'));
-	await fileService.writeFile(file2Uri, VSBuffer.fromString('line1\nline2\n'));
+	test('verification failure triggers rollback', async () => {
+		const fileUri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file.txt' });
+		await fileService.writeFile(fileUri, VSBuffer.fromString('original content'));
 
-	// Apply same edit to both files - they should result in same final content
-	const operations1: FileEditOperation[] = [
-		{ uri: file1Uri, type: 'edit', content: 'line1\nline2\nmodified' },
-	];
-	const operations2: FileEditOperation[] = [
-		{ uri: file2Uri, type: 'edit', content: 'line1\nline2\nmodified' },
-	];
+		// Mock post-apply verification to fail
+		const originalReadFile = fileService.readFile.bind(fileService);
+		let readCount = 0;
+		fileService.readFile = async (resource: URI, options?: IReadFileOptions): Promise<IFileContent> => {
+			readCount++;
+			// After apply, return different content to simulate verification failure
+			if (readCount > 2) {
+				const buffer = VSBuffer.fromString('wrong content');
+				return {
+					value: buffer,
+					resource,
+					name: resource.path.split('/').pop() || '',
+					size: buffer.byteLength,
+					etag: '',
+					mtime: Date.now(),
+					ctime: Date.now(),
+					readonly: false,
+					locked: false,
+				};
+			}
+			return originalReadFile(resource, options);
+		};
 
-	const result1 = await applyEngine.applyTransaction(operations1);
-	const result2 = await applyEngine.applyTransaction(operations2);
+		const operations: FileEditOperation[] = [
+			{ uri: fileUri, type: 'edit', content: 'new content' },
+		];
 
-	// Both should succeed
-	assert.strictEqual(result1.success, true);
-	assert.strictEqual(result2.success, true);
+		const result = await applyEngine.applyTransaction(operations);
 
-	// Final contents should be identical (normalized)
-	const content1 = await fileService.readFile(file1Uri);
-	const content2 = await fileService.readFile(file2Uri);
-	// Normalize both for comparison
-	const normalized1 = content1.value.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-	const normalized2 = content2.value.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-	assert.strictEqual(normalized1, normalized2, 'Contents should be identical after normalization');
-});
+		// Verify transaction failed due to verification
+		assert.strictEqual(result.success, false);
+		assert.strictEqual(result.errorCategory, 'verification_failure');
 
-test('create operation: new file creation with verification', async () => {
-	const fileUri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/newfile.txt' });
+		// Verify rollback was attempted
+		// The file should be restored to original state
+		// Note: In a real scenario, rollback would restore, but our mock doesn't fully implement it
+		// This test verifies the error category is correct
+	});
 
-	const operations: FileEditOperation[] = [
-		{ uri: fileUri, type: 'create', content: 'new file content' },
-	];
+	test('deterministic ordering: same inputs → same output hashes', async () => {
+		const file1Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/a.txt' });
+		const file2Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/b.txt' });
+		const file3Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/c.txt' });
 
-	const result = await applyEngine.applyTransaction(operations);
+		await fileService.writeFile(file1Uri, VSBuffer.fromString('content a'));
+		await fileService.writeFile(file2Uri, VSBuffer.fromString('content b'));
+		await fileService.writeFile(file3Uri, VSBuffer.fromString('content c'));
 
-	// Verify operation succeeded
-	assert.strictEqual(result.success, true);
-	assert.strictEqual(result.appliedFiles.length, 1);
-	assert.strictEqual(result.appliedFiles[0].toString(), fileUri.toString());
+		const operations1: FileEditOperation[] = [
+			{ uri: file3Uri, type: 'edit', content: 'modified c' },
+			{ uri: file1Uri, type: 'edit', content: 'modified a' },
+			{ uri: file2Uri, type: 'edit', content: 'modified b' },
+		];
 
-	// Verify file exists with correct content
-	const exists = await fileService.exists(fileUri);
-	assert.strictEqual(exists, true, 'File should be created');
+		const operations2: FileEditOperation[] = [
+			{ uri: file1Uri, type: 'edit', content: 'modified a' },
+			{ uri: file2Uri, type: 'edit', content: 'modified b' },
+			{ uri: file3Uri, type: 'edit', content: 'modified c' },
+		];
 
-	const content = await fileService.readFile(fileUri);
-	assert.strictEqual(content.value.toString(), 'new file content', 'File should have correct content');
-});
+		// Reset files
+		await fileService.writeFile(file1Uri, VSBuffer.fromString('content a'));
+		await fileService.writeFile(file2Uri, VSBuffer.fromString('content b'));
+		await fileService.writeFile(file3Uri, VSBuffer.fromString('content c'));
 
-test('edit operation: file modification with verification', async () => {
-	const fileUri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file.txt' });
-	await fileService.writeFile(fileUri, VSBuffer.fromString('original content'));
+		const result1 = await applyEngine.applyTransaction(operations1);
+		const hash1a = await fileService.readFile(file1Uri);
+		const hash1b = await fileService.readFile(file2Uri);
+		const hash1c = await fileService.readFile(file3Uri);
 
-	const operations: FileEditOperation[] = [
-		{ uri: fileUri, type: 'edit', content: 'modified content' },
-	];
+		// Reset files again
+		await fileService.writeFile(file1Uri, VSBuffer.fromString('content a'));
+		await fileService.writeFile(file2Uri, VSBuffer.fromString('content b'));
+		await fileService.writeFile(file3Uri, VSBuffer.fromString('content c'));
 
-	const result = await applyEngine.applyTransaction(operations);
+		const result2 = await applyEngine.applyTransaction(operations2);
+		const hash2a = await fileService.readFile(file1Uri);
+		const hash2b = await fileService.readFile(file2Uri);
+		const hash2c = await fileService.readFile(file3Uri);
 
-	// Verify operation succeeded
-	assert.strictEqual(result.success, true);
-	assert.strictEqual(result.appliedFiles.length, 1);
+		// Both should succeed
+		assert.strictEqual(result1.success, true);
+		assert.strictEqual(result2.success, true);
 
-	// Verify file content matches expected
-	const content = await fileService.readFile(fileUri);
-	assert.strictEqual(content.value.toString(), 'modified content', 'File should have modified content');
-});
+		// Final file contents should be identical (deterministic ordering)
+		assert.strictEqual(hash1a.value.toString(), hash2a.value.toString());
+		assert.strictEqual(hash1b.value.toString(), hash2b.value.toString());
+		assert.strictEqual(hash1c.value.toString(), hash2c.value.toString());
+	});
 
-test('multi-file transaction: all succeed or all fail', async () => {
-	const file1Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file1.txt' });
-	const file2Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file2.txt' });
-	const file3Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file3.txt' });
+	test('path safety: no writes outside workspace', async () => {
+		const outsideUri = URI.file('/outside/workspace/file.txt');
 
-	await fileService.writeFile(file1Uri, VSBuffer.fromString('content 1'));
-	await fileService.writeFile(file2Uri, VSBuffer.fromString('content 2'));
-	await fileService.writeFile(file3Uri, VSBuffer.fromString('content 3'));
+		const operations: FileEditOperation[] = [
+			{ uri: outsideUri, type: 'create', content: 'malicious content' },
+		];
 
-	// Mock second operation to fail
-	let writeCount = 0;
-	const originalWriteFile = fileService.writeFile.bind(fileService);
-	fileService.writeFile = async (resource: URI, content: VSBuffer) => {
-		writeCount++;
-		if (writeCount === 2 && resource.toString() === file2Uri.toString()) {
-			throw new Error('Simulated failure on file 2');
+		const result = await applyEngine.applyTransaction(operations);
+
+		// Verify operation was rejected
+		assert.strictEqual(result.success, false);
+		assert.strictEqual(result.errorCategory, 'write_failure');
+		assert.ok(result.error?.includes('outside workspace'));
+
+		// Verify file was not created
+		const exists = await fileService.exists(outsideUri);
+		assert.strictEqual(exists, false, 'File outside workspace should not be created');
+	});
+
+	test('dirty buffer handling: uses editor content when available', async () => {
+		const fileUri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file.txt' });
+		await fileService.writeFile(fileUri, VSBuffer.fromString('disk content'));
+
+		// Create a text model with different content (simulating dirty buffer)
+		const modelService = instantiationService.get(IModelService) as IModelService;
+		const textModel = modelService.createModel('dirty buffer content', null, fileUri);
+
+		try {
+			// The apply engine should use the dirty buffer content for base signature
+			const operations: FileEditOperation[] = [
+				{ uri: fileUri, type: 'edit', content: 'new content' },
+			];
+
+			// This test verifies that the engine can handle dirty buffers
+			// The actual implementation reads from textModelService which should return the model
+			const result = await applyEngine.applyTransaction(operations);
+
+			// Should succeed (the exact behavior depends on implementation)
+			assert.ok(result.success !== undefined);
+		} finally {
+			textModel.dispose();
 		}
-		return originalWriteFile(resource, content);
-	};
+	});
 
-	const operations: FileEditOperation[] = [
-		{ uri: file1Uri, type: 'edit', content: 'modified 1' },
-		{ uri: file2Uri, type: 'edit', content: 'modified 2' },
-		{ uri: file3Uri, type: 'edit', content: 'modified 3' },
-	];
+	test('line ending normalization: consistent hashing regardless of line endings', async () => {
+		const file1Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file1.txt' });
+		const file2Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file2.txt' });
 
-	const result = await applyEngine.applyTransaction(operations);
+		// Create files with different line endings but same content
+		await fileService.writeFile(file1Uri, VSBuffer.fromString('line1\r\nline2\r\n'));
+		await fileService.writeFile(file2Uri, VSBuffer.fromString('line1\nline2\n'));
 
-	// Verify transaction failed
-	assert.strictEqual(result.success, false);
+		// Apply same edit to both files - they should result in same final content
+		const operations1: FileEditOperation[] = [
+			{ uri: file1Uri, type: 'edit', content: 'line1\nline2\nmodified' },
+		];
+		const operations2: FileEditOperation[] = [
+			{ uri: file2Uri, type: 'edit', content: 'line1\nline2\nmodified' },
+		];
 
-	// Verify no files were modified (atomic rollback)
-	const content1 = await fileService.readFile(file1Uri);
-	const content2 = await fileService.readFile(file2Uri);
-	const content3 = await fileService.readFile(file3Uri);
+		const result1 = await applyEngine.applyTransaction(operations1);
+		const result2 = await applyEngine.applyTransaction(operations2);
 
-	assert.strictEqual(content1.value.toString(), 'content 1', 'File 1 should be unchanged');
-	assert.strictEqual(content2.value.toString(), 'content 2', 'File 2 should be unchanged');
-	assert.strictEqual(content3.value.toString(), 'content 3', 'File 3 should be unchanged');
-});
+		// Both should succeed
+		assert.strictEqual(result1.success, true);
+		assert.strictEqual(result2.success, true);
+
+		// Final contents should be identical (normalized)
+		const content1 = await fileService.readFile(file1Uri);
+		const content2 = await fileService.readFile(file2Uri);
+		// Normalize both for comparison
+		const normalized1 = content1.value.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+		const normalized2 = content2.value.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+		assert.strictEqual(normalized1, normalized2, 'Contents should be identical after normalization');
+	});
+
+	test('create operation: new file creation with verification', async () => {
+		const fileUri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/newfile.txt' });
+
+		const operations: FileEditOperation[] = [
+			{ uri: fileUri, type: 'create', content: 'new file content' },
+		];
+
+		const result = await applyEngine.applyTransaction(operations);
+
+		// Verify operation succeeded
+		assert.strictEqual(result.success, true);
+		assert.strictEqual(result.appliedFiles.length, 1);
+		assert.strictEqual(result.appliedFiles[0].toString(), fileUri.toString());
+
+		// Verify file exists with correct content
+		const exists = await fileService.exists(fileUri);
+		assert.strictEqual(exists, true, 'File should be created');
+
+		const content = await fileService.readFile(fileUri);
+		assert.strictEqual(content.value.toString(), 'new file content', 'File should have correct content');
+	});
+
+	test('edit operation: file modification with verification', async () => {
+		const fileUri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file.txt' });
+		await fileService.writeFile(fileUri, VSBuffer.fromString('original content'));
+
+		const operations: FileEditOperation[] = [
+			{ uri: fileUri, type: 'edit', content: 'modified content' },
+		];
+
+		const result = await applyEngine.applyTransaction(operations);
+
+		// Verify operation succeeded
+		assert.strictEqual(result.success, true);
+		assert.strictEqual(result.appliedFiles.length, 1);
+
+		// Verify file content matches expected
+		const content = await fileService.readFile(fileUri);
+		assert.strictEqual(content.value.toString(), 'modified content', 'File should have modified content');
+	});
+
+	test('multi-file transaction: all succeed or all fail', async () => {
+		const file1Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file1.txt' });
+		const file2Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file2.txt' });
+		const file3Uri = testWorkspaceUri.with({ path: testWorkspaceUri.path + '/file3.txt' });
+
+		await fileService.writeFile(file1Uri, VSBuffer.fromString('content 1'));
+		await fileService.writeFile(file2Uri, VSBuffer.fromString('content 2'));
+		await fileService.writeFile(file3Uri, VSBuffer.fromString('content 3'));
+
+		// Mock second operation to fail
+		let writeCount = 0;
+		const originalWriteFile = fileService.writeFile.bind(fileService);
+		fileService.writeFile = async (resource: URI, content: VSBuffer) => {
+			writeCount++;
+			if (writeCount === 2 && resource.toString() === file2Uri.toString()) {
+				throw new Error('Simulated failure on file 2');
+			}
+			return originalWriteFile(resource, content);
+		};
+
+		const operations: FileEditOperation[] = [
+			{ uri: file1Uri, type: 'edit', content: 'modified 1' },
+			{ uri: file2Uri, type: 'edit', content: 'modified 2' },
+			{ uri: file3Uri, type: 'edit', content: 'modified 3' },
+		];
+
+		const result = await applyEngine.applyTransaction(operations);
+
+		// Verify transaction failed
+		assert.strictEqual(result.success, false);
+
+		// Verify no files were modified (atomic rollback)
+		const content1 = await fileService.readFile(file1Uri);
+		const content2 = await fileService.readFile(file2Uri);
+		const content3 = await fileService.readFile(file3Uri);
+
+		assert.strictEqual(content1.value.toString(), 'content 1', 'File 1 should be unchanged');
+		assert.strictEqual(content2.value.toString(), 'content 2', 'File 2 should be unchanged');
+		assert.strictEqual(content3.value.toString(), 'content 3', 'File 3 should be unchanged');
+	});
 });

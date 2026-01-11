@@ -343,8 +343,8 @@ export class ToolsService implements IToolsService {
 			generate_tests: (params: RawToolParamsObj) => {
 				const { uri: uriUnknown, function_name: functionNameUnknown, test_framework: testFrameworkUnknown } = params
 				const uri = validateURI(uriUnknown, workspaceContextService, true)
-				const functionName = validateOptionalStr('function_name', functionNameUnknown)
-				const testFramework = validateOptionalStr('test_framework', testFrameworkUnknown)
+				const functionName = validateOptionalStr('function_name', functionNameUnknown) ?? undefined
+				const testFramework = validateOptionalStr('test_framework', testFrameworkUnknown) ?? undefined
 				return { uri, functionName, testFramework }
 			},
 
@@ -889,7 +889,6 @@ export class ToolsService implements IToolsService {
 					throw new Error(`File does not exist: ${uri.fsPath}`)
 				}
 
-				const content = model.getValue(EndOfLinePreference.LF)
 				const fileExtension = uri.fsPath.split('.').pop()?.toLowerCase() || ''
 
 				// Detect test framework from file extension and project structure
@@ -947,7 +946,10 @@ export class ToolsService implements IToolsService {
 						const defs = Array.isArray(definitions) ? definitions : [definitions]
 						for (const def of defs) {
 							if (def.uri && def.range) {
-								allReferences.push({ uri: def.uri, range: def.range })
+								const range = Range.lift(def.range)
+								if (range) {
+									allReferences.push({ uri: def.uri, range })
+								}
 							}
 						}
 					}
@@ -959,7 +961,10 @@ export class ToolsService implements IToolsService {
 					if (references) {
 						for (const ref of references) {
 							if (ref.uri && ref.range) {
-								allReferences.push({ uri: ref.uri, range: ref.range })
+								const range = Range.lift(ref.range)
+								if (range) {
+									allReferences.push({ uri: ref.uri, range })
+								}
 							}
 						}
 					}

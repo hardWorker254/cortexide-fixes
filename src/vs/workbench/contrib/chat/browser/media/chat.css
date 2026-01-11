@@ -1097,7 +1097,7 @@ have to be updated for changes to the rules above, or to support more deeply nes
 }
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget {
-	padding: 6px 3px 6px 3px;
+	padding: 8px 6px 6px 6px;
 	box-sizing: border-box;
 	border: 1px solid var(--vscode-input-border, transparent);
 	background-color: var(--vscode-editor-background);
@@ -1105,8 +1105,15 @@ have to be updated for changes to the rules above, or to support more deeply nes
 	border-top-left-radius: 4px;
 	border-top-right-radius: 4px;
 	flex-direction: column;
-	gap: 2px;
+	gap: 4px;
 	overflow: hidden;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+	transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget.has-todos {
+	border-color: var(--vscode-input-border, transparent);
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-expand {
@@ -1116,15 +1123,21 @@ have to be updated for changes to the rules above, or to support more deeply nes
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-expand .monaco-button {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: 6px;
 	cursor: pointer;
 	justify-content: space-between;
 	width: 100%;
 	background-color: transparent;
 	border-color: transparent;
 	color: var(--vscode-foreground);
-	padding: 0;
+	padding: 4px 2px;
 	min-width: unset;
+	border-radius: 3px;
+	transition: background-color 0.15s ease;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-expand .monaco-button:hover {
+	background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
 }
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-expand .monaco-button:focus:not(:focus-visible) {
@@ -1132,21 +1145,31 @@ have to be updated for changes to the rules above, or to support more deeply nes
 }
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-expand .todo-list-title-section {
-	padding-left: 3px;
+	padding-left: 2px;
 	display: flex;
 	align-items: center;
 	flex: 1;
-	font-size: 11px;
+	font-size: 12px;
+	font-weight: 500;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	line-height: 16px;
+	line-height: 18px;
+	min-width: 0;
 }
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-expand .todo-list-title-section .codicon {
-	font-size: 16px;
-	line-height: 16px;
+	font-size: 14px;
+	line-height: 18px;
 	flex-shrink: 0;
+	transition: transform 0.2s ease, color 0.2s ease;
+	color: var(--vscode-foreground);
+	opacity: 0.8;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-expand .monaco-button:hover .todo-list-title-section .codicon {
+	opacity: 1;
+	transform: scale(1.05);
 }
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-clear-button-container {
@@ -1162,19 +1185,23 @@ have to be updated for changes to the rules above, or to support more deeply nes
 	border-color: transparent;
 	color: var(--vscode-foreground);
 	cursor: pointer;
-	height: 16px;
-	padding: 2px;
-	border-radius: 2px;
+	height: 18px;
+	width: 18px;
+	padding: 3px;
+	border-radius: 3px;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	min-width: unset;
-	width: 14px;
-	margin-right: 1px;
+	margin-right: 2px;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	opacity: 0.7;
 }
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-clear-button-container .monaco-button:hover {
-	background-color: var(--vscode-toolbar-hoverBackground);
+	background-color: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+	opacity: 1;
+	transform: scale(1.1);
 }
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-clear-button-container .monaco-button:focus {
@@ -1190,21 +1217,71 @@ have to be updated for changes to the rules above, or to support more deeply nes
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .expand-icon {
 	flex-shrink: 0;
-	margin-right: 3px;
+	margin-right: 4px;
+	transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-title {
-	font-weight: normal;
-	font-size: 11px;
+	font-weight: 500;
+	font-size: 12px;
 	display: flex;
 	align-items: center;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	width: 100%;
+	color: var(--vscode-foreground);
+	line-height: 18px;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-title-section {
+	flex-direction: column;
+	gap: 2px;
+	width: 100%;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-progress-bar-container {
+	width: 100%;
+	height: 3px;
+	background-color: var(--vscode-progressBar-background, rgba(128, 128, 128, 0.2));
+	border-radius: 2px;
+	overflow: hidden;
+	margin-top: 4px;
+	position: relative;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-progress-bar {
+	height: 100%;
+	background: linear-gradient(90deg,
+		var(--vscode-progressBar-foreground, var(--vscode-charts-blue)) 0%,
+		var(--vscode-progressBar-foreground, var(--vscode-charts-green)) 100%);
+	border-radius: 2px;
+	transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+	box-shadow: 0 0 4px rgba(123, 92, 255, 0.3);
+	position: relative;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-progress-bar::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: linear-gradient(90deg,
+		transparent 0%,
+		rgba(255, 255, 255, 0.2) 50%,
+		transparent 100%);
+	animation: progress-shimmer 2s infinite;
+}
+
+@keyframes progress-shimmer {
+	0% { transform: translateX(-100%); }
+	100% { transform: translateX(100%); }
 }
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-container {
-	margin-top: 2px;
-	max-height: calc(6.5 * 21px);
+	margin-top: 6px;
+	max-height: calc(6.5 * 24px);
 	/* 6.5 items to show half-line affordance */
 	overflow-y: auto;
 	overscroll-behavior: contain;
@@ -1213,6 +1290,26 @@ have to be updated for changes to the rules above, or to support more deeply nes
 	/* Half item height to show partial next item */
 	scroll-padding-bottom: 24px;
 	/* Half item height to show partial previous item */
+	padding: 2px 0;
+	transition: opacity 0.2s ease;
+}
+
+/* Custom scrollbar styling */
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-container::-webkit-scrollbar {
+	width: 6px;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-container::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-container::-webkit-scrollbar-thumb {
+	background: var(--vscode-scrollbarSlider-background, rgba(128, 128, 128, 0.3));
+	border-radius: 3px;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-list-container::-webkit-scrollbar-thumb:hover {
+	background: var(--vscode-scrollbarSlider-hoverBackground, rgba(128, 128, 128, 0.5));
 }
 
 
@@ -1226,15 +1323,25 @@ have to be updated for changes to the rules above, or to support more deeply nes
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 8px;
 	scroll-snap-align: start;
-	min-height: 22px;
-	font-size: var(--vscode-chat-font-size-body-m);
-	padding: 0px 3px;
-	border-radius: 2px;
+	min-height: 24px;
+	font-size: var(--vscode-chat-font-size-body-m, 13px);
+	padding: 4px 6px;
+	border-radius: 4px;
 	cursor: pointer;
+	position: relative;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	margin: 1px 0;
+	border: 1px solid transparent;
 }
 
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item:hover {
+	background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
+	border-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.2));
+	transform: translateX(2px);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item:focus {
 	outline: 1px solid var(--vscode-focusBorder);
@@ -1247,7 +1354,58 @@ have to be updated for changes to the rules above, or to support more deeply nes
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item > .todo-status-icon.codicon {
 	flex-shrink: 0;
-	font-size: 16px;
+	font-size: 18px;
+	width: 18px;
+	height: 18px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+	border-radius: 50%;
+	position: relative;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item:hover > .todo-status-icon.codicon {
+	transform: scale(1.15);
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item > .todo-status-icon.codicon::before {
+	transition: all 0.2s ease;
+}
+
+/* Status-specific styling - using class-based approach for better compatibility */
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item.todo-completed {
+	opacity: 0.85;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item.todo-completed .todo-content {
+	text-decoration: line-through;
+	opacity: 0.7;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item.todo-in-progress {
+	background-color: var(--vscode-list-activeSelectionBackground, rgba(123, 92, 255, 0.1));
+	border-color: var(--vscode-charts-blue, rgba(123, 92, 255, 0.3));
+	font-weight: 500;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item.todo-not-started {
+	opacity: 0.9;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item.todo-in-progress .todo-status-icon.codicon {
+	animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+	0%, 100% { opacity: 1; transform: scale(1); }
+	50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+@keyframes todo-status-change {
+	0% { transform: scale(1); }
+	50% { transform: scale(1.02); }
+	100% { transform: scale(1); }
 }
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-content {
@@ -1256,6 +1414,38 @@ have to be updated for changes to the rules above, or to support more deeply nes
 	white-space: nowrap;
 	text-overflow: ellipsis;
 	min-width: 0;
+	font-weight: 400;
+	line-height: 20px;
+	transition: opacity 0.2s ease, text-decoration 0.2s ease;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item > .todo-delete-button.codicon {
+	flex-shrink: 0;
+	font-size: 13px;
+	color: var(--vscode-icon-foreground, var(--vscode-foreground));
+	cursor: pointer;
+	opacity: 0;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	padding: 3px;
+	border-radius: 3px;
+	margin-left: auto;
+	width: 18px;
+	height: 18px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background-color: transparent;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item:hover > .todo-delete-button.codicon {
+	opacity: 0.6;
+}
+
+.interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .todo-item > .todo-delete-button.codicon:hover {
+	opacity: 1;
+	background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-errorForeground, rgba(255, 92, 122, 0.2)));
+	color: var(--vscode-errorForeground, #ff5c7a);
+	transform: scale(1.15) rotate(90deg);
 }
 
 .interactive-session .interactive-input-part > .chat-todo-list-widget-container .chat-todo-list-widget .monaco-scrollable-element .monaco-list-rows .monaco-list-row {

@@ -84,7 +84,7 @@ export function createManageTodoListToolData(writeOnly: boolean, includeDescript
 		icon: ThemeIcon.fromId(Codicon.checklist.id),
 		displayName: localize('tool.manageTodoList.displayName', 'Manage and track todo items for task planning'),
 		userDescription: localize('tool.manageTodoList.userDescription', 'Tool for managing and tracking todo items for task planning'),
-		modelDescription: 'Manage a structured todo list to track progress and plan tasks throughout your coding session. Use this tool VERY frequently to ensure task visibility and proper planning.\n\nWhen to use this tool:\n- Complex multi-step work requiring planning and tracking\n- When user provides multiple tasks or requests (numbered/comma-separated)\n- After receiving new instructions that require multiple steps\n- BEFORE starting work on any todo (mark as in-progress)\n- IMMEDIATELY after completing each todo (mark completed individually)\n- When breaking down larger tasks into smaller actionable steps\n- To give users visibility into your progress and planning\n\nWhen NOT to use:\n- Single, trivial tasks that can be completed in one step\n- Purely conversational/informational requests\n- When just reading files or performing simple searches\n\nCRITICAL workflow:\n1. Plan tasks by writing todo list with specific, actionable items\n2. Mark ONE todo as in-progress before starting work\n3. Complete the work for that specific todo\n4. Mark that todo as completed IMMEDIATELY\n5. Move to next todo and repeat\n\nTodo states:\n- not-started: Todo not yet begun\n- in-progress: Currently working (limit ONE at a time)\n- completed: Finished successfully\n\nIMPORTANT: Mark todos completed as soon as they are done. Do not batch completions.',
+		modelDescription: 'Manage a structured todo list to track progress and plan tasks throughout your coding session. This tool provides visibility into your work and helps organize complex tasks.\n\n**WHEN TO CREATE A TODO LIST:**\n- Complex multi-step work requiring planning and tracking (3+ distinct steps)\n- User provides multiple tasks or requests (numbered/comma-separated)\n- After receiving new instructions that require multiple steps\n- When breaking down larger tasks into smaller actionable steps\n- To give users visibility into your progress and planning\n\n**WHEN NOT TO USE:**\n- Single, straightforward tasks that can be completed in one step\n- Purely conversational/informational requests\n- When just reading files or performing simple searches\n- Tasks with no organizational benefit (< 3 items)\n\n**CRITICAL WORKFLOW - Follow this exactly:**\n1. **PLAN FIRST**: Create todo list with specific, actionable items (3-10 items ideal)\n   - Use clear, action-oriented titles (3-7 words)\n   - Include descriptions with file paths, methods, or acceptance criteria\n   - Number todos sequentially starting from 1\n\n2. **WORK SEQUENTIALLY**: Process todos one at a time\n   - Mark ONE todo as "in-progress" BEFORE starting work on it\n   - Complete ALL work for that specific todo\n   - Mark that todo as "completed" IMMEDIATELY after finishing\n   - Then move to the next todo\n\n3. **UPDATE FREQUENTLY**: Update the todo list as you progress\n   - Read current todos before starting work\n   - Update status transitions immediately (not-started → in-progress → completed)\n   - Don\'t batch multiple status changes - update as you go\n\n**TODO STATES:**\n- **not-started**: Todo not yet begun (default state)\n- **in-progress**: Currently working on this (ONLY ONE at a time)\n- **completed**: Fully finished with no blockers\n\n**BEST PRACTICES:**\n- Keep todos focused and actionable (not too fine, not too coarse)\n- Update status immediately when transitioning\n- Provide clear titles that describe what needs to be done\n- Include descriptions with specific details (files, methods, requirements)\n- Don\'t create todos for trivial tasks\n- Don\'t batch completions - mark each todo complete as soon as it\'s done\n\n**IMPORTANT REMINDERS:**\n- Always provide the COMPLETE todo list when writing (partial updates not supported)\n- Only ONE todo should be "in-progress" at any time\n- Mark todos "completed" as soon as they are done, not at the end\n- Read todos before starting work to understand current state',
 		source: ToolDataSource.Internal,
 		inputSchema: {
 			type: 'object',
@@ -211,9 +211,21 @@ export class ManageTodoListTool extends Disposable implements IToolImpl {
 	private generatePastTenseMessage(currentTodos: IChatTodo[], newTodos: IManageTodoListToolInputParams['todoList']): string {
 		// If no current todos, this is creating new ones
 		if (currentTodos.length === 0) {
-			return newTodos.length === 1
-				? localize('todo.created.single', "Created 1 todo")
-				: localize('todo.created.multiple', "Created {0} todos", newTodos.length);
+			const completedCount = newTodos.filter(t => t.status === 'completed').length;
+			const inProgressCount = newTodos.filter(t => t.status === 'in-progress').length;
+			const totalCount = newTodos.length;
+
+			if (newTodos.length === 1) {
+				return localize('todo.created.single', "Created 1 todo");
+			}
+
+			// Include progress info if todos are already started/completed
+			if (completedCount > 0 || inProgressCount > 0) {
+				return localize('todo.created.multiple.withProgress', "Created {0} todos ({1} completed, {2} in progress)",
+					totalCount, completedCount, inProgressCount);
+			}
+
+			return localize('todo.created.multiple', "Created {0} todos", newTodos.length);
 		}
 
 		// Create map for easier comparison
@@ -228,8 +240,11 @@ export class ManageTodoListTool extends Disposable implements IToolImpl {
 		if (startedTodos.length > 0) {
 			const startedTodo = startedTodos[0]; // Should only be one in-progress at a time
 			const totalTodos = newTodos.length;
+			const completedCount = newTodos.filter(t => t.status === 'completed').length;
 			const currentPosition = newTodos.findIndex(todo => todo.id === startedTodo.id) + 1;
-			return localize('todo.starting', "Starting: *{0}* ({1}/{2})", startedTodo.title, currentPosition, totalTodos);
+			const progressPercent = Math.round((completedCount / totalTodos) * 100);
+			return localize('todo.starting', "Starting: *{0}* ({1}/{2}, {3}% complete)",
+				startedTodo.title, currentPosition, totalTodos, progressPercent);
 		}
 
 		// Check for newly completed todos
@@ -241,19 +256,48 @@ export class ManageTodoListTool extends Disposable implements IToolImpl {
 		if (completedTodos.length > 0) {
 			const completedTodo = completedTodos[0]; // Get the first completed todo for the message
 			const totalTodos = newTodos.length;
+			const completedCount = newTodos.filter(t => t.status === 'completed').length;
 			const currentPosition = newTodos.findIndex(todo => todo.id === completedTodo.id) + 1;
-			return localize('todo.completed', "Completed: *{0}* ({1}/{2})", completedTodo.title, currentPosition, totalTodos);
+			const progressPercent = Math.round((completedCount / totalTodos) * 100);
+			return localize('todo.completed', "Completed: *{0}* ({1}/{2}, {3}% complete)",
+				completedTodo.title, currentPosition, totalTodos, progressPercent);
 		}
 
 		// Check for new todos added
 		const addedTodos = newTodos.filter(newTodo => !currentTodoMap.has(newTodo.id));
 		if (addedTodos.length > 0) {
-			return addedTodos.length === 1
-				? localize('todo.added.single', "Added 1 todo")
-				: localize('todo.added.multiple', "Added {0} todos", addedTodos.length);
+			const totalTodos = newTodos.length;
+			const completedCount = newTodos.filter(t => t.status === 'completed').length;
+			if (addedTodos.length === 1) {
+				return localize('todo.added.single', "Added 1 todo ({0}/{1} total)", completedCount, totalTodos);
+			}
+			return localize('todo.added.multiple', "Added {0} todos ({1}/{2} total)",
+				addedTodos.length, completedCount, totalTodos);
+		}
+
+		// Check for status changes (other than in-progress/completed which are handled above)
+		const statusChanged = newTodos.some(newTodo => {
+			const currentTodo = currentTodoMap.get(newTodo.id);
+			return currentTodo && currentTodo.status !== newTodo.status;
+		});
+
+		if (statusChanged) {
+			const totalTodos = newTodos.length;
+			const completedCount = newTodos.filter(t => t.status === 'completed').length;
+			const progressPercent = Math.round((completedCount / totalTodos) * 100);
+			return localize('todo.statusUpdated', "Updated todo status ({0}/{1}, {2}% complete)",
+				completedCount, totalTodos, progressPercent);
 		}
 
 		// Default message for other updates
+		const totalTodos = newTodos.length;
+		const completedCount = newTodos.filter(t => t.status === 'completed').length;
+		if (totalTodos > 0) {
+			const progressPercent = Math.round((completedCount / totalTodos) * 100);
+			return localize('todo.updated.withProgress', "Updated todo list ({0}/{1}, {2}% complete)",
+				completedCount, totalTodos, progressPercent);
+		}
+
 		return localize('todo.updated', "Updated todo list");
 	}
 
