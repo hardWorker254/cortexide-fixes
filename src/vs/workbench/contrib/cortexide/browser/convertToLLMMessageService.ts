@@ -459,16 +459,26 @@ const prepareMessages_openai_tools = (messages: SimpleLLMMessage[]): AnthropicOr
 		}
 
 		// edit previous assistant message to have called the tool
-		const prevMsg = 0 <= i - 1 && i - 1 <= newMessages.length ? newMessages[i - 1] : undefined
-		if (prevMsg?.role === 'assistant') {
-			prevMsg.tool_calls = [{
+		// Check the last message in newMessages (not messages[i-1] since arrays might have different lengths)
+		const lastMsg = newMessages.length > 0 ? newMessages[newMessages.length - 1] : undefined
+		if (lastMsg?.role === 'assistant') {
+			// Add tool_calls to the assistant message if not already present
+			if (!lastMsg.tool_calls) {
+				lastMsg.tool_calls = []
+			}
+			lastMsg.tool_calls.push({
 				type: 'function',
 				id: currMsg.id,
 				function: {
 					name: currMsg.name,
 					arguments: JSON.stringify(currMsg.rawParams)
 				}
-			}]
+			})
+		} else {
+			// Tool message without preceding assistant message - this violates OpenAI API requirements
+			// Skip this tool message to avoid API errors
+			console.warn(`Skipping tool message ${currMsg.name} (id: ${currMsg.id}) because it doesn't follow an assistant message. Last message role: ${lastMsg?.role || 'none'}`)
+			continue
 		}
 
 		// add the tool

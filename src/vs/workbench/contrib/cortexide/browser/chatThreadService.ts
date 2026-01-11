@@ -1579,8 +1579,17 @@ class ChatThreadService extends Disposable implements IChatThreadService {
 		updatedSteps[stepIdx] = { ...updatedSteps[stepIdx], ...updates }
 		const updatedPlan: PlanMessage = { ...plan, steps: updatedSteps }
 		this._editMessageInThread(threadId, planIdx, updatedPlan)
-		// Invalidate cache after update
-		this._planCache.delete(threadId)
+		// PERFORMANCE: Update cache in place instead of invalidating
+		// This avoids expensive re-lookup on next access
+		const cached = this._planCache.get(threadId)
+		if (cached && cached.planIdx === planIdx) {
+			// Update cached plan directly - same plan, just updated steps
+			cached.plan = updatedPlan
+			cached.lastChecked = Date.now()
+		} else {
+			// Cache miss or different plan - invalidate to be safe
+			this._planCache.delete(threadId)
+		}
 	}
 
 	// Fast internal versions that take step directly (avoid lookup)
@@ -1597,7 +1606,7 @@ class ChatThreadService extends Disposable implements IChatThreadService {
 		}
 	}
 
-	private _markStepCompletedInternal(threadId: string, currentStep: { plan: PlanMessage, planIdx: number, step: PlanStep, stepIdx: number }, succeeded: boolean, error?: string) {
+	private _markStepCompletedInternal(threadId: string, currentStep: { plan: PlanMessage, planIdx: number, step: PlanStep, stepIdx: number }, succeeded: boolean, error?: string): { plan: PlanMessage, planIdx: number, step: PlanStep, stepIdx: number } | undefined {
 		const { planIdx, stepIdx } = currentStep
 
 		const updates: Partial<PlanStep> = {
@@ -1606,12 +1615,56 @@ class ChatThreadService extends Disposable implements IChatThreadService {
 			error: error
 		}
 		this._updatePlanStep(threadId, planIdx, stepIdx, updates)
+
+		// PERFORMANCE: Return updated step info to avoid re-lookup
+		// Get updated plan from cache (should be fresh after _updatePlanStep)
+		const cached = this._planCache.get(threadId)
+		if (cached && cached.planIdx === planIdx) {
+			const updatedStep = cached.plan.steps[stepIdx]
+			if (updatedStep) {
+				return { plan: cached.plan, planIdx, step: updatedStep, stepIdx }
+			}
+		}
+		// Fallback: re-fetch if cache miss (shouldn't happen, but safe)
+		return this._getCurrentStep(threadId, false)
 	}
 
-	private _startNextStep(threadId: string): { step: PlanStep, checkpointIdx: number } | undefined {
-		// Force refresh to get latest plan state (may have been updated)
-		const planInfo = this._getCurrentPlan(threadId, true)
-		if (!planInfo) return undefined
+	private _startNextStep(threadId: string): { step: PlanStep, stepIdx: number, planIdx: number, plan: PlanMessage, checkpointIdx: number } | undefined {
+		// PERFORMANCE: Use cached plan if available, only force refresh if needed
+		const planInfo = this._getCurrentPlan(threadId, false) // Try cache first
+		if (!planInfo) {
+			// Cache miss - do full refresh
+			const refreshed = this._getCurrentPlan(threadId, true)
+			if (!refreshed) return undefined
+			const { plan, planIdx } = refreshed
+
+			// Find next queued step (not disabled, queued status)
+			const stepIdx = plan.steps.findIndex(s =>
+				!s.disabled && s.status === 'queued'
+			)
+			if (stepIdx < 0) return undefined
+
+			// Create checkpoint before starting step
+			this._addUserCheckpoint({ threadId })
+			const thread = this.state.allThreads[threadId]
+			if (!thread) return undefined
+			const checkpointIdx = thread.messages.length - 1
+
+			// Update step to running and link checkpoint
+			this._updatePlanStep(threadId, planIdx, stepIdx, {
+				status: 'running',
+				startTime: Date.now(),
+				checkpointIdx: checkpointIdx
+			})
+
+			// Get updated plan from cache
+			const cached = this._planCache.get(threadId)
+			const updatedPlan = (cached && cached.planIdx === planIdx) ? cached.plan : plan
+			const updatedStep = updatedPlan.steps[stepIdx]
+
+			return { step: updatedStep, stepIdx, planIdx, plan: updatedPlan, checkpointIdx }
+		}
+
 		const { plan, planIdx } = planInfo
 
 		// Find next queued step (not disabled, queued status)
@@ -1619,8 +1672,6 @@ class ChatThreadService extends Disposable implements IChatThreadService {
 			!s.disabled && s.status === 'queued'
 		)
 		if (stepIdx < 0) return undefined
-
-		const step = plan.steps[stepIdx]
 
 		// Create checkpoint before starting step
 		this._addUserCheckpoint({ threadId })
@@ -1635,7 +1686,12 @@ class ChatThreadService extends Disposable implements IChatThreadService {
 			checkpointIdx: checkpointIdx
 		})
 
-		return { step, checkpointIdx }
+		// Get updated plan from cache (should be fresh after _updatePlanStep)
+		const cached = this._planCache.get(threadId)
+		const updatedPlan = (cached && cached.planIdx === planIdx) ? cached.plan : plan
+		const updatedStep = updatedPlan.steps[stepIdx]
+
+		return { step: updatedStep, stepIdx, planIdx, plan: updatedPlan, checkpointIdx }
 	}
 
 	private _computeMCPServerOfToolName = (toolName: string) => {
@@ -2777,40 +2833,49 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 					executionStartTime: Date.now()
 				}
 				this._editMessageInThread(threadId, planInfo.planIdx, updatedPlan)
-				// Invalidate cache after update and refresh planInfo to get updated plan
-				this._planCache.delete(threadId)
-				const refreshed = this._getCurrentPlan(threadId, true) // Refresh to get updated plan
-				if (refreshed) {
-					planInfo = refreshed
+				// PERFORMANCE: Update cache in place instead of invalidating
+				const cached = this._planCache.get(threadId)
+				if (cached && cached.planIdx === planInfo.planIdx) {
+					cached.plan = updatedPlan
+					cached.lastChecked = Date.now()
+					planInfo = { plan: updatedPlan, planIdx: planInfo.planIdx }
+				} else {
+					// Cache miss - refresh
+					const refreshed = this._getCurrentPlan(threadId, true)
+					if (refreshed) {
+						planInfo = refreshed
+					}
 				}
 			}
 
-			// Get current step once
-			const currentStep = this._getCurrentStep(threadId, true) // Force refresh to get latest step state
+			// PERFORMANCE: Get current step once, reuse result
+			const currentStep = this._getCurrentStep(threadId, false) // Try cache first
 			if (currentStep && currentStep.step.status === 'queued') {
-				// Start next step - this updates the step status to 'running' and invalidates cache
-				this._startNextStep(threadId)
-				// Refresh both plan and step after starting to get updated state
-				this._planCache.delete(threadId)
-				const refreshedPlanInfo = this._getCurrentPlan(threadId, true)
-				// Ensure we have a valid planInfo before assigning
-				if (refreshedPlanInfo) {
+				// Start next step - returns full step info to avoid re-lookup
+				const startedStep = this._startNextStep(threadId)
+				if (startedStep) {
+					// Use returned step info directly - no need to re-lookup
 					activePlanTracking = {
-						planInfo: refreshedPlanInfo,
-						currentStep: this._getCurrentStep(threadId, true) // Force refresh to see 'running' status
+						planInfo: { plan: startedStep.plan, planIdx: startedStep.planIdx },
+						currentStep: {
+							plan: startedStep.plan,
+							planIdx: startedStep.planIdx,
+							step: startedStep.step,
+							stepIdx: startedStep.stepIdx
+						}
 					}
 				} else if (planInfo) {
-					// Fallback to original planInfo if refresh failed (shouldn't happen, but type-safe)
+					// Fallback if start failed
 					activePlanTracking = {
 						planInfo,
-						currentStep: this._getCurrentStep(threadId, true)
+						currentStep: this._getCurrentStep(threadId, false)
 					}
 				}
 			} else {
 				// planInfo is guaranteed to be defined here due to the outer if check
 				activePlanTracking = {
 					planInfo,
-					currentStep
+					currentStep: currentStep || this._getCurrentStep(threadId, false)
 				}
 			}
 		}
@@ -2847,16 +2912,53 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 				this._setStreamState(threadId, undefined)
 				this._addUserCheckpoint({ threadId })
 				if (activePlanTracking?.currentStep) {
-					this._markStepCompletedInternal(threadId, activePlanTracking.currentStep, false, 'Interrupted by user')
-					refreshPlanStep()
+					// PERFORMANCE: Use returned step info instead of re-looking up
+					const updatedStep = this._markStepCompletedInternal(threadId, activePlanTracking.currentStep, false, 'Interrupted by user')
+					if (updatedStep) {
+						activePlanTracking.currentStep = updatedStep
+						activePlanTracking.planInfo = { plan: updatedStep.plan, planIdx: updatedStep.planIdx }
+					} else {
+						refreshPlanStep()
+					}
 				}
 			} else {
 				// Mark step as completed on success
 				if (activePlanTracking?.currentStep) {
-					this._markStepCompletedInternal(threadId, activePlanTracking.currentStep, true)
-					// Start next step
-					this._startNextStep(threadId)
-					refreshPlanStep()
+					// PERFORMANCE: Use returned step info instead of re-looking up
+					const updatedStep = this._markStepCompletedInternal(threadId, activePlanTracking.currentStep, true)
+					if (updatedStep) {
+						activePlanTracking.currentStep = updatedStep
+						activePlanTracking.planInfo = { plan: updatedStep.plan, planIdx: updatedStep.planIdx }
+
+						// Start next step - use returned value
+						const startedStep = this._startNextStep(threadId)
+						if (startedStep) {
+							activePlanTracking.planInfo = { plan: startedStep.plan, planIdx: startedStep.planIdx }
+							activePlanTracking.currentStep = {
+								plan: startedStep.plan,
+								planIdx: startedStep.planIdx,
+								step: startedStep.step,
+								stepIdx: startedStep.stepIdx
+							}
+						} else {
+							// No more steps - refresh to get final state
+							refreshPlanStep()
+						}
+					} else {
+						// Fallback if update failed
+						const startedStep = this._startNextStep(threadId)
+						if (startedStep) {
+							activePlanTracking.planInfo = { plan: startedStep.plan, planIdx: startedStep.planIdx }
+							activePlanTracking.currentStep = {
+								plan: startedStep.plan,
+								planIdx: startedStep.planIdx,
+								step: startedStep.step,
+								stepIdx: startedStep.stepIdx
+							}
+						} else {
+							refreshPlanStep()
+						}
+					}
 				}
 			}
 		}
@@ -3999,8 +4101,14 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 					if (interrupted) {
 						this._setStreamState(threadId, undefined)
 						if (activePlanTracking?.currentStep) {
-							this._markStepCompletedInternal(threadId, activePlanTracking.currentStep, false, 'Interrupted by user')
-							refreshPlanStep()
+							// PERFORMANCE: Use returned step info instead of re-looking up
+							const updatedStep = this._markStepCompletedInternal(threadId, activePlanTracking.currentStep, false, 'Interrupted by user')
+							if (updatedStep) {
+								activePlanTracking.currentStep = updatedStep
+								activePlanTracking.planInfo = { plan: updatedStep.plan, planIdx: updatedStep.planIdx }
+							} else {
+								refreshPlanStep()
+							}
 						}
 						return
 					}
@@ -4018,15 +4126,52 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 							if (lastMsg && lastMsg.role === 'tool') {
 								const toolMsg = lastMsg as ToolMessage<ToolName>
 								if (toolMsg.type === 'tool_error') {
-									this._markStepCompletedInternal(threadId, activePlanTracking.currentStep, false, toolMsg.result || 'Tool execution failed')
-									refreshPlanStep()
-								} else if (toolMsg.type === 'success') {
-									this._markStepCompletedInternal(threadId, activePlanTracking.currentStep, true)
-									refreshPlanStep()
-									// Start next step if available (check after refresh)
-									if (activePlanTracking.currentStep && activePlanTracking.currentStep.step.status === 'queued') {
-										this._startNextStep(threadId)
+									// PERFORMANCE: Use returned step info instead of re-looking up
+									const updatedStep = this._markStepCompletedInternal(threadId, activePlanTracking.currentStep, false, toolMsg.result || 'Tool execution failed')
+									if (updatedStep) {
+										activePlanTracking.currentStep = updatedStep
+									} else {
 										refreshPlanStep()
+									}
+								} else if (toolMsg.type === 'success') {
+									// PERFORMANCE: Use returned step info instead of re-looking up
+									const updatedStep = this._markStepCompletedInternal(threadId, activePlanTracking.currentStep, true)
+									if (updatedStep) {
+										activePlanTracking.currentStep = updatedStep
+										// Update planInfo to match updated plan
+										activePlanTracking.planInfo = { plan: updatedStep.plan, planIdx: updatedStep.planIdx }
+
+										// Start next step if available - use returned value
+										const startedStep = this._startNextStep(threadId)
+										if (startedStep) {
+											activePlanTracking.planInfo = { plan: startedStep.plan, planIdx: startedStep.planIdx }
+											activePlanTracking.currentStep = {
+												plan: startedStep.plan,
+												planIdx: startedStep.planIdx,
+												step: startedStep.step,
+												stepIdx: startedStep.stepIdx
+											}
+										} else {
+											// No more steps - refresh to get final state
+											refreshPlanStep()
+										}
+									} else {
+										// Fallback if update failed
+										refreshPlanStep()
+										if (activePlanTracking.currentStep && activePlanTracking.currentStep.step.status === 'queued') {
+											const startedStep = this._startNextStep(threadId)
+											if (startedStep) {
+												activePlanTracking.planInfo = { plan: startedStep.plan, planIdx: startedStep.planIdx }
+												activePlanTracking.currentStep = {
+													plan: startedStep.plan,
+													planIdx: startedStep.planIdx,
+													step: startedStep.step,
+													stepIdx: startedStep.stepIdx
+												}
+											} else {
+												refreshPlanStep()
+											}
+										}
 									}
 								}
 							}
