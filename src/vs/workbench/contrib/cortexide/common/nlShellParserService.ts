@@ -69,8 +69,8 @@ class NLShellParserService implements INLShellParserService {
 		// If auto is selected, try to find a fallback model
 		if (modelSelection.providerName === 'auto' && modelSelection.modelName === 'auto') {
 			// Try to find the first available configured model (prefer online models first, then local)
-			const providerNames: Array<'anthropic' | 'openAI' | 'gemini' | 'xAI' | 'mistral' | 'deepseek' | 'groq' | 'ollama' | 'vLLM' | 'lmStudio' | 'openAICompatible' | 'openRouter' | 'liteLLM'> =
-				['anthropic', 'openAI', 'gemini', 'xAI', 'mistral', 'deepseek', 'groq', 'ollama', 'vLLM', 'lmStudio', 'openAICompatible', 'openRouter', 'liteLLM'];
+			const providerNames: Array<'anthropic' | 'openAI' | 'gemini' | 'xAI' | 'mistral' | 'deepseek' | 'groq' | 'ollama' | 'vLLM' | 'lmStudio' | 'openAICompatible' | 'openRouter' | 'liteLLM' | 'pollinations'> =
+				['anthropic', 'openAI', 'gemini', 'xAI', 'mistral', 'deepseek', 'groq', 'ollama', 'vLLM', 'lmStudio', 'openAICompatible', 'openRouter', 'liteLLM', 'pollinations'];
 			let fallbackModel: { providerName: string; modelName: string } | null = null;
 
 			for (const providerName of providerNames) {

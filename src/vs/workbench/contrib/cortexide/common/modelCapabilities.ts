@@ -85,6 +85,9 @@ export const defaultProviderSettings = {
 		region: 'us-east-1', // add region setting
 		endpoint: '', // optionally allow overriding default
 	},
+	pollinations: {
+		apiKey: '',
+	},
 
 } as const
 
@@ -278,6 +281,14 @@ export const defaultModelsOfProvider = {
 	microsoftAzure: [],
 	awsBedrock: [],
 	liteLLM: [],
+	pollinations: [ // https://enter.pollinations.ai/api/docs, https://pollinations.ai/llms.txt
+		'openai',
+		'gemini',
+		'gemini-large',
+		'claude',
+		'deepseek',
+		'qwen3-coder-30b',
+	],
 
 
 } as const satisfies Record<ProviderName, string[]>
@@ -1701,6 +1712,22 @@ const liteLLMSettings: VoidStaticProviderInfo = { // https://docs.litellm.ai/doc
 	},
 }
 
+// ---------------- POLLINATIONS ----------------
+const pollinationsSettings: VoidStaticProviderInfo = {
+	modelOptionsFallback: (modelName) => {
+		const fallback = extensiveModelOptionsFallback(modelName);
+		if (fallback && !fallback.specialToolFormat) {
+			fallback.specialToolFormat = 'openai-style';
+		}
+		return fallback;
+	},
+	modelOptions: {},
+	providerReasoningIOSettings: {
+		input: { includeInPayload: openAICompatIncludeInPayloadReasoning },
+		output: { nameOfFieldInDelta: 'reasoning_content' },
+	},
+}
+
 
 // ---------------- OPENROUTER ----------------
 const openRouterModelOptions_assumingOpenAICompat = {
@@ -1928,6 +1955,8 @@ const modelSettingsOfProvider: { [providerName in ProviderName]: VoidStaticProvi
 
 	liteLLM: liteLLMSettings,
 	lmStudio: lmStudioSettings,
+
+	pollinations: pollinationsSettings,
 
 	googleVertex: googleVertexSettings,
 	microsoftAzure: microsoftAzureSettings,
