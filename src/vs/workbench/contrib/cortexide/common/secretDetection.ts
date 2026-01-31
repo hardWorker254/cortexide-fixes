@@ -97,11 +97,11 @@ export const DEFAULT_SECRET_PATTERNS: SecretPattern[] = [
 		enabled: true,
 		priority: 100,
 	},
-	// AWS secret keys
+	// AWS secret keys (exclude '/' to avoid false positives on path segments, e.g. prof/cortexide/browser/convertTo)
 	{
 		id: 'aws-secret-key',
 		name: 'AWS Secret Key',
-		pattern: /\b([a-zA-Z0-9/+=]{40})\b/g,
+		pattern: /\b([a-zA-Z0-9+=]{40})\b/g,
 		enabled: true,
 		priority: 85,
 	},
