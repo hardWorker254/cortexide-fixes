@@ -4526,42 +4526,52 @@ export const SidebarChat = () => {
 		{(isRunning === 'LLM' || isRunning === 'preparing') && !displayContentSoFar && !reasoningSoFar ? (
 			<ProseWrapper>
 				<div
-					className="flex items-center gap-2 text-sm opacity-70 loading-state-transition"
+					className="flex flex-col gap-1"
 					role="status"
 					aria-live="polite"
 					aria-atomic="true"
 				>
-					{isRunning === 'preparing' && currThreadStreamState?.llmInfo?.displayContentSoFar ? (
-						<>
-							<span className="text-void-fg-2" aria-hidden="false">{currThreadStreamState.llmInfo.displayContentSoFar}</span>
-							<IconLoading state="thinking" inline />
-						</>
-					) : isRunning === 'preparing' ? (
-						<>
-							<span className="text-void-fg-2" aria-hidden="false">Preparing request</span>
-							<IconLoading state="thinking" inline />
-						</>
-					) : (
-						<>
-							<span className="text-void-fg-2" aria-hidden="false">Generating response</span>
-							<IconLoading state="typing" inline />
-						</>
-					)}
+					<div className="flex items-center gap-2 text-sm opacity-70 loading-state-transition">
+						{isRunning === 'preparing' && currThreadStreamState?.llmInfo?.displayContentSoFar ? (
+							<>
+								<span className="text-void-fg-2" aria-hidden="false">{currThreadStreamState.llmInfo.displayContentSoFar}</span>
+								<IconLoading state="thinking" inline />
+							</>
+						) : isRunning === 'preparing' ? (
+							<>
+								<span className="text-void-fg-2" aria-hidden="false">Preparing request</span>
+								<IconLoading state="thinking" inline />
+							</>
+						) : (
+							<>
+								<span className="text-void-fg-2" aria-hidden="false">Generating response</span>
+								<IconLoading state="typing" inline />
+							</>
+						)}
+					</div>
+					<span className="text-xs text-void-fg-3 opacity-60">Press Escape to cancel</span>
 				</div>
 			</ProseWrapper>
+		) : null}
+
+		{/* Escape hint when streaming (e.g. "Waiting for model response...") */}
+		{(isRunning === 'LLM' || isRunning === 'preparing') && (displayContentSoFar || reasoningSoFar) ? (
+			<p className="text-xs text-void-fg-3 opacity-60 mt-1" role="status">Press Escape to cancel</p>
 		) : null}
 
 
 		{/* error message */}
 		{latestError === undefined ? null :
-			<div className='px-2 my-1 message-enter'>
+			<div className='px-2 my-1 message-enter space-y-2'>
 				<ErrorDisplay
 					message={latestError.message}
 					fullError={latestError.fullError}
 					onDismiss={() => { chatThreadsService.dismissStreamError(currentThread.id) }}
 					showDismiss={true}
 				/>
-
+				<p className="text-sm text-void-fg-3 px-1">
+					You can try again or open settings to change the model.
+				</p>
 				<WarningBox className='text-sm my-1 mx-3' onClick={() => { commandService.executeCommand(CORTEXIDE_OPEN_SETTINGS_ACTION_ID) }} text='Open settings' />
 			</div>
 		}

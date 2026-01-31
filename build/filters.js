@@ -109,6 +109,7 @@ module.exports.indentationFilter = [
 	'!build/win32/**',
 	'!build/checker/**',
 	'!src/vs/workbench/contrib/terminal/common/scripts/psreadline/**',
+	'!src/vs/workbench/contrib/cortexide/**',
 
 	// except multiple specific files
 	'!**/package.json',
@@ -187,7 +188,7 @@ module.exports.copyrightFilter = [
 	'!extensions/html-language-features/server/src/modes/typescript/*',
 	'!extensions/*/server/bin/*',
 	'!src/vs/workbench/contrib/terminal/common/scripts/psreadline/**',
-	'!src/vs/workbench/contrib/cortexide/browser/react/**',
+	'!src/vs/workbench/contrib/cortexide/**',
 ];
 
 module.exports.tsFormattingFilter = [
