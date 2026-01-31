@@ -8,7 +8,7 @@ import { SettingsOfProvider, ModelSelection, ProviderName } from '../../../../co
 /**
  * Vision-capable providers that require API keys
  */
-const VISION_PROVIDERS: ProviderName[] = ['anthropic', 'openAI', 'gemini'];
+const VISION_PROVIDERS: ProviderName[] = ['anthropic', 'openAI', 'gemini', 'pollinations'];
 
 /**
  * Checks if user has any vision-capable API keys configured

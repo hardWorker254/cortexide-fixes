@@ -709,7 +709,7 @@ class VoidSettingsService extends Disposable implements ICortexideSettingsServic
 		}
 
 		// Try to find the first available configured model (prefer online models first, then local)
-		const providerNames: ProviderName[] = ['anthropic', 'openAI', 'gemini', 'xAI', 'mistral', 'deepseek', 'groq', 'ollama', 'vLLM', 'lmStudio', 'openAICompatible', 'openRouter', 'liteLLM']
+		const providerNames: ProviderName[] = ['anthropic', 'openAI', 'gemini', 'xAI', 'mistral', 'deepseek', 'groq', 'ollama', 'vLLM', 'lmStudio', 'openAICompatible', 'openRouter', 'liteLLM', 'pollinations']
 
 		for (const providerName of providerNames) {
 			const providerSettings = this.state.settingsOfProvider[providerName]

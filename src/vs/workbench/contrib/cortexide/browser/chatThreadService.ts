@@ -3465,23 +3465,27 @@ Output ONLY the JSON, no other text. Start with { and end with }.`
 						// Mark stream as complete with 0 tokens on error
 						chatLatencyAudit.markStreamComplete(finalRequestId, 0)
 
-						// Audit log: record error
-						// PERFORMANCE: Reuse cached auditEnabled check from earlier in function
-						if (auditEnabled && modelSelection) {
-							await this._auditLogService.append({
-								ts: Date.now(),
-								action: 'reply',
-								model: `${modelSelection.providerName}/${modelSelection.modelName}`,
-								ok: false,
-								meta: {
-									threadId,
-									requestId: finalRequestId,
-									error: error?.message,
-								},
-							});
-						}
+						// Clear stream state immediately so submit button becomes active (avoids stuck "Waiting for model response..." if audit or resolve fails)
+						this._setStreamState(threadId, { isRunning: undefined, error })
 
-						resMessageIsDonePromise({ type: 'llmError', error: error })
+						try {
+							// Audit log: record error
+							if (auditEnabled && modelSelection) {
+								await this._auditLogService.append({
+									ts: Date.now(),
+									action: 'reply',
+									model: `${modelSelection.providerName}/${modelSelection.modelName}`,
+									ok: false,
+									meta: {
+										threadId,
+										requestId: finalRequestId,
+										error: error?.message,
+									},
+								});
+							}
+						} finally {
+							resMessageIsDonePromise({ type: 'llmError', error: error })
+						}
 					},
 					onAbort: () => {
 						// stop the loop to free up the promise, but don't modify state (already handled by whatever stopped it)

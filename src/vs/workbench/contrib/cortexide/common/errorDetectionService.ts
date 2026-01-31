@@ -300,8 +300,8 @@ class ErrorDetectionService extends Disposable implements IErrorDetectionService
 
 			// Resolve auto model selection
 			if (modelSelection.providerName === 'auto' && modelSelection.modelName === 'auto') {
-				const providerNames: Array<'anthropic' | 'openAI' | 'gemini' | 'xAI' | 'mistral' | 'deepseek' | 'groq' | 'ollama' | 'vLLM' | 'lmStudio' | 'openAICompatible' | 'openRouter' | 'liteLLM'> =
-					['anthropic', 'openAI', 'gemini', 'xAI', 'mistral', 'deepseek', 'groq', 'ollama', 'vLLM', 'lmStudio', 'openAICompatible', 'openRouter', 'liteLLM'];
+				const providerNames: Array<'anthropic' | 'openAI' | 'gemini' | 'xAI' | 'mistral' | 'deepseek' | 'groq' | 'ollama' | 'vLLM' | 'lmStudio' | 'openAICompatible' | 'openRouter' | 'liteLLM' | 'pollinations'> =
+					['anthropic', 'openAI', 'gemini', 'xAI', 'mistral', 'deepseek', 'groq', 'ollama', 'vLLM', 'lmStudio', 'openAICompatible', 'openRouter', 'liteLLM', 'pollinations'];
 
 				for (const providerName of providerNames) {
 					const providerSettings = settings.settingsOfProvider[providerName];

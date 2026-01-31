@@ -125,9 +125,9 @@ const cloudProviders: ProviderName[] = ['googleVertex', 'liteLLM', 'microsoftAzu
 
 // Data structures for provider tabs
 const providerNamesOfTab: Record<TabName, ProviderName[]> = {
-	Free: ['gemini', 'openRouter'],
+	Free: ['gemini', 'openRouter', 'pollinations'],
 	Local: localProviderNames,
-	Paid: providerNames.filter(pn => !(['gemini', 'openRouter', ...localProviderNames, ...cloudProviders] as string[]).includes(pn)) as ProviderName[],
+	Paid: providerNames.filter(pn => !(['gemini', 'openRouter', 'pollinations', ...localProviderNames, ...cloudProviders] as string[]).includes(pn)) as ProviderName[],
 	'Cloud/Other': cloudProviders,
 };
 
@@ -237,14 +237,16 @@ const AddProvidersPage = ({ pageIndex, setPageIndex }: { pageIndex: number, setP
 								<div className="flex items-center justify-between mb-3">
 									<div className="text-xl font-medium text-void-fg-0 flex items-center gap-2">
 										Add {displayInfoOfProviderName(providerName).title}
-										{(providerName === 'gemini' || providerName === 'openRouter') && (
+										{(providerName === 'gemini' || providerName === 'openRouter' || providerName === 'pollinations') && (
 											<span
 												data-tooltip-id="void-tooltip-provider-info"
 												data-tooltip-place="right"
 												className="text-xs text-blue-400"
 												data-tooltip-content={providerName === 'gemini'
 													? 'Gemini 2.5 Pro offers 25 free chats daily, Flash offers ~500. Upgrade later if you exhaust credits.'
-													: 'OpenRouter grants 50 free chats a day (1000 with a $10 deposit) on models tagged :free.'}
+													: providerName === 'openRouter'
+														? 'OpenRouter grants 50 free chats a day (1000 with a $10 deposit) on models tagged :free.'
+														: 'Cheap API with many models (Pollen credits). Get your key at enter.pollinations.ai.'}
 											>
 												Details
 											</span>
@@ -614,7 +616,7 @@ const VoidOnboardingContent = () => {
 	const providerNamesOfWantToUseOption: { [wantToUseOption in WantToUseOption]: ProviderName[] } = {
 		smart: ['anthropic', 'openAI', 'gemini', 'openRouter'],
 		private: ['ollama', 'vLLM', 'openAICompatible', 'lmStudio'],
-		cheap: ['gemini', 'deepseek', 'openRouter', 'ollama', 'vLLM'],
+		cheap: ['gemini', 'deepseek', 'openRouter', 'pollinations', 'ollama', 'vLLM'],
 		all: providerNames,
 	}
 

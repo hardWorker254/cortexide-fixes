@@ -22,7 +22,7 @@ import { availableTools, InternalToolInfo } from '../../common/prompt/prompts.js
 import { generateUuid } from '../../../../../base/common/uuid.js';
 
 const getGoogleApiKey = async () => {
-	// module‑level singleton
+	// module-level singleton
 	const auth = new GoogleAuth({ scopes: `https://www.googleapis.com/auth/cloud-platform` });
 	const key = await auth.getAccessToken()
 	if (!key) throw new Error(`Google API failed to generate a key.`)
@@ -290,11 +290,11 @@ const newOpenAICompatibleSDK = async ({ settingsOfProvider, providerName, includ
 			*/
 		const { endpoint, apiKey } = settingsOfProvider.awsBedrock
 
-		// ① use the user-supplied proxy if present
-		// ② otherwise default to local LiteLLM
+		// 1) use the user-supplied proxy if present
+		// 2) otherwise default to local LiteLLM
 		let baseURL = endpoint || 'http://localhost:4000/v1'
 
-		// Normalize: make sure we end with “/v1”
+		// Normalize: make sure we end with "/v1"
 		if (!baseURL.endsWith('/v1'))
 			baseURL = baseURL.replace(/\/+$/, '') + '/v1'
 
@@ -322,6 +322,11 @@ const newOpenAICompatibleSDK = async ({ settingsOfProvider, providerName, includ
 	else if (providerName === 'mistral') {
 		const thisConfig = settingsOfProvider[providerName]
 		return new OpenAI({ baseURL: 'https://api.mistral.ai/v1', apiKey: thisConfig.apiKey, ...commonPayloadOpts })
+	}
+	else if (providerName === 'pollinations') {
+		// Inference is at gen.pollinations.ai; API keys are from enter.pollinations.ai
+		const thisConfig = settingsOfProvider[providerName]
+		return new OpenAI({ baseURL: 'https://gen.pollinations.ai/v1', apiKey: thisConfig.apiKey, ...commonPayloadOpts })
 	}
 
 	else throw new Error(`CortexIDE providerName was invalid: ${providerName}.`)
@@ -517,6 +522,36 @@ const rawToolCallObjOfAnthropicParams = (toolBlock: Anthropic.Messages.ToolUseBl
 // ------------ OPENAI-COMPATIBLE ------------
 
 
+// Placeholder for empty message content; Vertex/Pollinations require "non-whitespace text", not just a space.
+const EMPTY_CONTENT_PLACEHOLDER = '(no content)'
+
+/**
+ * Sanitize messages for APIs (e.g. Vertex, Pollinations) that require non-empty, non-whitespace content
+ * in every message except the optional final assistant message.
+ * Only mutates messages that have a 'content' field (OpenAI/Anthropic style); Gemini-style (parts) are passed through.
+ */
+const sanitizeOpenAIMessagesForEmptyContent = (messages: LLMChatMessage[]): LLMChatMessage[] => {
+	if (!messages?.length) return messages
+	const lastIdx = messages.length - 1
+	const result = messages.map((msg, i) => {
+		if (!('content' in msg)) return msg
+		const content = (msg as { role: string; content: string | unknown[] }).content
+		const isLastAndAssistant = i === lastIdx && msg.role === 'assistant'
+		if (typeof content === 'string') {
+			if (content.trim().length > 0) return msg
+			if (isLastAndAssistant) return msg
+			return { ...msg, content: EMPTY_CONTENT_PLACEHOLDER }
+		}
+		if (Array.isArray(content)) {
+			const hasNonEmptyPart = content.some((p: any) => (p.type === 'text' && p.text?.trim?.()) || (p.type === 'image_url' && p.image_url?.url))
+			if (hasNonEmptyPart || isLastAndAssistant) return msg
+			return { ...msg, content: [{ type: 'text', text: EMPTY_CONTENT_PLACEHOLDER }] }
+		}
+		return msg
+	})
+	return result as LLMChatMessage[]
+}
+
 const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onError, settingsOfProvider, modelSelectionOptions, modelName: modelName_, _setAborter, providerName, chatMode, separateSystemMessage, overridesOfModel, mcpTools }: SendChatParams_Internal) => {
 	const {
 		modelName,
@@ -524,6 +559,9 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 		reasoningCapabilities,
 		additionalOpenAIPayload,
 	} = getModelCapabilities(providerName, modelName_, overridesOfModel)
+
+	// APIs like Vertex/Pollinations require non-empty content except for the optional final assistant message
+	const messagesToSend = sanitizeOpenAIMessagesForEmptyContent(messages)
 
 	const { providerReasoningIOSettings } = getProviderCapabilities(providerName)
 
@@ -764,7 +802,7 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 	// Try streaming first
 	const options: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
 		model: modelName,
-		messages: messages as any,
+		messages: messagesToSend as any,
 		stream: true,
 		...nativeToolsObj,
 		...additionalOpenAIPayload
@@ -824,7 +862,7 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 				// Silently retry - don't show error notification for organization verification issues
 				const nonStreamingOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
 					model: modelName,
-					messages: messages as any,
+					messages: messagesToSend as any,
 					stream: false,
 					...nativeToolsObj,
 					...additionalOpenAIPayload
@@ -879,7 +917,7 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 				// CRITICAL: Retry immediately without delay for tool support errors (they're fast to detect)
 				const optionsWithoutTools: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
 					model: modelName,
-					messages: messages as any,
+					messages: messagesToSend as any,
 					stream: true,
 					// Explicitly omit tools - don't include nativeToolsObj
 					...additionalOpenAIPayload
@@ -1551,6 +1589,11 @@ export const sendLLMMessageToProviderImplementation = {
 		sendFIM: null,
 		list: null,
 	},
+	pollinations: {
+		sendChat: (params) => _sendOpenAICompatibleChat(params),
+		sendFIM: null,
+		list: null,
+	},
 
 } satisfies CallFnOfProvider
 
@@ -1567,7 +1610,7 @@ codestral https://ollama.com/library/codestral/blobs/51707752a87c
 [SUFFIX]{{ .Suffix }}[PREFIX] {{ .Prompt }}
 
 deepseek-coder-v2 https://ollama.com/library/deepseek-coder-v2/blobs/22091531faf0
-<｜fim▁begin｜>{{ .Prompt }}<｜fim▁hole｜>{{ .Suffix }}<｜fim▁end｜>
+<|fim_begin|>{{ .Prompt }}<|fim_hole|>{{ .Suffix }}<|fim_end|>
 
 starcoder2 https://ollama.com/library/starcoder2/blobs/3b190e68fefe
 <file_sep>
