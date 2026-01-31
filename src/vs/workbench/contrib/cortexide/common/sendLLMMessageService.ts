@@ -16,6 +16,7 @@ import { ICortexideSettingsService } from './cortexideSettingsService.js';
 import { IMCPService } from './mcpService.js';
 import { ISecretDetectionService } from './secretDetectionService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
 
 // calls channel to implement features
 export const ILLMMessageService = createDecorator<ILLMMessageService>('llmMessageService');
@@ -66,6 +67,7 @@ export class LLMMessageService extends Disposable implements ILLMMessageService 
 		@INotificationService private readonly notificationService: INotificationService,
 		@IMCPService private readonly mcpService: IMCPService,
 		@ISecretDetectionService private readonly secretDetectionService: ISecretDetectionService,
+		@ILogService private readonly logService: ILogService,
 	) {
 		super()
 
@@ -173,25 +175,30 @@ export class LLMMessageService extends Disposable implements ILLMMessageService 
 				}
 			}
 
+			// Log secret detection result (trace) for verification that paths are not falsely redacted as AWS Secret Key
+			const countByType = new Map<string, number>();
+			for (const match of totalMatches) {
+				const name = match.pattern.name;
+				countByType.set(name, (countByType.get(name) || 0) + 1);
+			}
+			const typesList = Array.from(countByType.entries())
+				.map(([name, count]) => `${name}=${count}`)
+				.join(', ');
+			this.logService.trace('[SecretDetection] Chat messages scanned.', hasAnySecrets ? `Redacted: ${typesList}` : 'No secrets detected (paths in system message are not redacted).');
+
 			// Show warning if secrets detected
 			if (hasAnySecrets) {
-				const countByType = new Map<string, number>();
-				for (const match of totalMatches) {
-					const name = match.pattern.name;
-					countByType.set(name, (countByType.get(name) || 0) + 1);
-				}
-
-				const typesList = Array.from(countByType.entries())
+				const typesListForUser = Array.from(countByType.entries())
 					.map(([name, count]) => `${name} (${count})`)
 					.join(', ');
 
 				if (config.mode === 'block') {
 					// Always show block notifications (they're important)
 					this.notificationService.warn(
-						`Secret detected: ${typesList}. Message blocked from sending. Use environment variables or secure vaults instead of pasting keys into chat.`
+						`Secret detected: ${typesListForUser}. Message blocked from sending. Use environment variables or secure vaults instead of pasting keys into chat.`
 					);
 					onError({
-						message: `Message blocked: Secrets detected (${typesList}). Please remove secrets before sending.`,
+						message: `Message blocked: Secrets detected (${typesListForUser}). Please remove secrets before sending.`,
 						fullError: null,
 					});
 					return null;
