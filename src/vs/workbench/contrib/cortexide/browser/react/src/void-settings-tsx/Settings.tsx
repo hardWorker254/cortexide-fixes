@@ -1083,7 +1083,7 @@ export const OllamaSetupInstructions = ({ sayWeAutoDetect }: { sayWeAutoDetect?:
                 />
                 <span className='text-void-fg-3 text-xs'>Use headless browsing</span>
                 <span className='text-void-fg-4 text-xs' title='Use headless BrowserWindow for better content extraction from complex pages. Disable to use direct HTTP fetch instead.'>
-                    (ℹ️)
+                    (i)
                 </span>
             </div>
         </div>
@@ -1530,7 +1530,7 @@ const MCPServersList = () => {
 
 export const Settings = () => {
 	const isDark = useIsDark()
-	// ─── sidebar nav ──────────────────────────
+	// --- sidebar nav ---
 	const [selectedSection, setSelectedSection] =
 		useState<Tab>('models');
 
@@ -1622,9 +1622,17 @@ export const Settings = () => {
 
 
 	return (
-		<div className={`@@void-scope ${isDark ? 'dark' : ''}`} style={{ height: '100%', width: '100%', overflow: 'auto' }}>
+		<div
+			className={`@@void-scope ${isDark ? 'dark' : ''}`}
+			style={{
+				height: '100%',
+				width: '100%',
+				overflow: 'auto',
+				backgroundColor: 'var(--vscode-editor-background)',
+			}}
+		>
 			<div className="flex flex-col md:flex-row w-full gap-6 max-w-[900px] mx-auto mb-32" style={{ minHeight: '80vh' }}>
-				{/* ──────────────  SIDEBAR  ────────────── */}
+				{/* --- SIDEBAR --- */}
 
 				<aside className="md:w-1/4 w-full p-6 shrink-0">
 					{/* vertical tab list */}
@@ -1653,7 +1661,7 @@ export const Settings = () => {
 					</div>
 				</aside>
 
-				{/* ───────────── MAIN PANE ───────────── */}
+				{/* --- MAIN PANE --- */}
 				<main className="flex-1 p-6 select-none">
 
 

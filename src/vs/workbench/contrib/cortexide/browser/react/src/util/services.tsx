@@ -151,8 +151,10 @@ export const _registerServices = (accessor: ServicesAccessor) => {
 	disposables.push(
 		themeService.onDidColorThemeChange(({ type }) => {
 			colorThemeState = type
-			// Defer so we don't call React setState synchronously from theme callback (avoids "update while rendering" when switching theme)
-			queueMicrotask(() => colorThemeStateListeners.forEach(l => l(colorThemeState)))
+			// Defer to next frame so we don't call React setState during theme application (avoids "update while rendering" when switching theme)
+			requestAnimationFrame(() => {
+				colorThemeStateListeners.forEach(l => l(colorThemeState))
+			})
 		})
 	)
 
