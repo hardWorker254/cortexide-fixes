@@ -110,10 +110,7 @@ export const indentationFilter = Object.freeze<string[]>([
 	'!build/win32/**',
 	'!build/checker/**',
 	'!src/vs/workbench/contrib/terminal/common/scripts/psreadline/**',
-<<<<<<< Updated upstream
-=======
 	'!src/vs/workbench/contrib/cortexide/**',
->>>>>>> Stashed changes
 
 	// except multiple specific files
 	'!**/package.json',
@@ -198,16 +195,8 @@ export const copyrightFilter = Object.freeze<string[]>([
 	'!extensions/html-language-features/server/src/modes/typescript/*',
 	'!extensions/*/server/bin/*',
 	'!src/vs/workbench/contrib/terminal/common/scripts/psreadline/**',
-<<<<<<< Updated upstream
-]);
-=======
-<<<<<<< HEAD:build/filters.js
 	'!src/vs/workbench/contrib/cortexide/**',
-];
-=======
 ]);
->>>>>>> vscode/main:build/filters.ts
->>>>>>> Stashed changes
 
 export const tsFormattingFilter = Object.freeze<string[]>([
 	'src/**/*.ts',
