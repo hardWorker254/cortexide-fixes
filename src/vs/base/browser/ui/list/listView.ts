@@ -1612,7 +1612,15 @@ export class ListView<T> implements IListView<T> {
 
 	private probeDynamicHeight(index: number): number {
 		const item = this.items[index];
+		const diff = this.probeDynamicHeightForItem(item, index);
+		if (diff > 0) {
+			this.virtualDelegate.setDynamicHeight?.(item.element, item.size);
+		}
 
+		return diff;
+	}
+
+	private probeDynamicHeightForItem(item: IItem<T>, index: number): number {
 		if (!!this.virtualDelegate.getDynamicHeight) {
 			const newSize = this.virtualDelegate.getDynamicHeight(item.element);
 			if (newSize !== null) {
@@ -1636,8 +1644,12 @@ export class ListView<T> implements IListView<T> {
 		if (item.row) {
 			item.row.domNode.style.height = '';
 			item.size = item.row.domNode.offsetHeight;
-			if (item.size === 0 && !isAncestor(item.row.domNode, getWindow(item.row.domNode).document.body)) {
-				console.warn('Measuring item node that is not in DOM! Add ListView to the DOM before measuring row height!', new Error().stack);
+			if (item.size === 0) {
+				if (!isAncestor(item.row.domNode, getWindow(item.row.domNode).document.body)) {
+					console.warn('Measuring item node that is not in DOM! Add ListView to the DOM before measuring row height!', new Error().stack);
+				} else {
+					console.warn('Measured item node at 0px- ensure that ListView is not display:none before measuring row height!', new Error().stack);
+				}
 			}
 			item.lastDynamicHeightWidth = this.renderWidth;
 			return item.size - size;
@@ -1656,8 +1668,6 @@ export class ListView<T> implements IListView<T> {
 		renderer.renderElement(item.element, index, row.templateData);
 		item.size = row.domNode.offsetHeight;
 		renderer.disposeElement?.(item.element, index, row.templateData);
-
-		this.virtualDelegate.setDynamicHeight?.(item.element, item.size);
 
 		item.lastDynamicHeightWidth = this.renderWidth;
 		row.domNode.remove();

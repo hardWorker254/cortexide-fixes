@@ -12,8 +12,8 @@ import path from 'path';
 import crypto from 'crypto';
 import { Stream } from 'stream';
 import File from 'vinyl';
-import { createStatsStream } from './stats';
-import * as util2 from './util';
+import { createStatsStream } from './stats.ts';
+import * as util2 from './util.ts';
 import filter from 'gulp-filter';
 import rename from 'gulp-rename';
 import fancyLog from 'fancy-log';
@@ -21,13 +21,16 @@ import ansiColors from 'ansi-colors';
 import buffer from 'gulp-buffer';
 import * as jsoncParser from 'jsonc-parser';
 import webpack from 'webpack';
-import { getProductionDependencies } from './dependencies';
-import { IExtensionDefinition, getExtensionStream } from './builtInExtensions';
-import { getVersion } from './getVersion';
-import { fetchUrls, fetchGithub } from './fetch';
-const vzip = require('gulp-vinyl-zip');
+import { getProductionDependencies } from './dependencies.ts';
+import { type IExtensionDefinition, getExtensionStream } from './builtInExtensions.ts';
+import { getVersion } from './getVersion.ts';
+import { fetchUrls, fetchGithub } from './fetch.ts';
+import vzip from 'gulp-vinyl-zip';
 
-const root = path.dirname(path.dirname(__dirname));
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
+const root = path.dirname(path.dirname(import.meta.dirname));
 const commit = getVersion(root);
 const sourceMappingURLBase = `https://main.vscode-cdn.net/sourcemaps/${commit}`;
 
@@ -95,12 +98,20 @@ function fromLocalWebpack(extensionPath: string, webpackConfigFileName: string, 
 	const result = es.through();
 
 	const packagedDependencies: string[] = [];
+	const stripOutSourceMaps: string[] = [];
 	const packageJsonConfig = require(path.join(extensionPath, 'package.json'));
 	if (packageJsonConfig.dependencies) {
-		const webpackRootConfig = require(path.join(extensionPath, webpackConfigFileName)).default;
+		const webpackConfig = require(path.join(extensionPath, webpackConfigFileName));
+		const webpackRootConfig = webpackConfig.default;
 		for (const key in webpackRootConfig.externals) {
 			if (key in packageJsonConfig.dependencies) {
 				packagedDependencies.push(key);
+			}
+		}
+
+		if (webpackConfig.StripOutSourceMaps) {
+			for (const filePath of webpackConfig.StripOutSourceMaps) {
+				stripOutSourceMaps.push(filePath);
 			}
 		}
 	}
@@ -122,14 +133,13 @@ function fromLocalWebpack(extensionPath: string, webpackConfigFileName: string, 
 
 		// check for a webpack configuration files, then invoke webpack
 		// and merge its output with the files stream.
-		const webpackConfigLocations = (<string[]>glob.sync(
+		const webpackConfigLocations = (glob.sync(
 			path.join(extensionPath, '**', webpackConfigFileName),
 			{ ignore: ['**/node_modules'] }
-		));
-
+		) as string[]);
 		const webpackStreams = webpackConfigLocations.flatMap(webpackConfigPath => {
 
-			const webpackDone = (err: any, stats: any) => {
+			const webpackDone = (err: Error | undefined, stats: any) => {
 				fancyLog(`Bundled extension: ${ansiColors.yellow(path.join(path.basename(extensionPath), path.relative(extensionPath, webpackConfigPath)))}...`);
 				if (err) {
 					result.emit('error', err);
@@ -175,10 +185,15 @@ function fromLocalWebpack(extensionPath: string, webpackConfigFileName: string, 
 						// * rewrite sourceMappingURL
 						// * save to disk so that upload-task picks this up
 						if (path.extname(data.basename) === '.js') {
-							const contents = (<Buffer>data.contents).toString('utf8');
-							data.contents = Buffer.from(contents.replace(/\n\/\/# sourceMappingURL=(.*)$/gm, function (_m, g1) {
-								return `\n//# sourceMappingURL=${sourceMappingURLBase}/extensions/${path.basename(extensionPath)}/${relativeOutputPath}/${g1}`;
-							}), 'utf8');
+							if (stripOutSourceMaps.indexOf(data.relative) >= 0) { // remove source map
+								const contents = (data.contents as Buffer).toString('utf8');
+								data.contents = Buffer.from(contents.replace(/\n\/\/# sourceMappingURL=(.*)$/gm, ''), 'utf8');
+							} else {
+								const contents = (data.contents as Buffer).toString('utf8');
+								data.contents = Buffer.from(contents.replace(/\n\/\/# sourceMappingURL=(.*)$/gm, function (_m, g1) {
+									return `\n//# sourceMappingURL=${sourceMappingURLBase}/extensions/${path.basename(extensionPath)}/${relativeOutputPath}/${g1}`;
+								}), 'utf8');
+							}
 						}
 
 						this.emit('data', data);
@@ -333,7 +348,7 @@ const marketplaceWebExtensionsExclude = new Set([
 	'ms-vscode.vscode-js-profile-table'
 ]);
 
-const productJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../../product.json'), 'utf8'));
+const productJson = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '../../product.json'), 'utf8'));
 const builtInExtensions: IExtensionDefinition[] = productJson.builtInExtensions || [];
 const webBuiltInExtensions: IExtensionDefinition[] = productJson.webBuiltInExtensions || [];
 
@@ -417,7 +432,7 @@ export function packageAllLocalExtensionsStream(forWeb: boolean, disableMangle: 
 function doPackageLocalExtensionsStream(forWeb: boolean, disableMangle: boolean, native: boolean): Stream {
 	const nativeExtensionsSet = new Set(nativeExtensions);
 	const localExtensionsDescriptions = (
-		(<string[]>glob.sync('extensions/*/package.json'))
+		(glob.sync('extensions/*/package.json') as string[])
 			.map(manifestPath => {
 				const absoluteManifestPath = path.join(root, manifestPath);
 				const extensionPath = path.dirname(path.join(root, manifestPath));

@@ -8,7 +8,7 @@ import { gracefulify } from 'graceful-fs';
 import * as cp from 'child_process';
 import * as path from 'path';
 import * as os from 'os';
-import * as minimist from 'minimist';
+import minimist from 'minimist';
 import * as vscodetest from '@vscode/test-electron';
 import fetch from 'node-fetch';
 import { Quality, MultiLogger, Logger, ConsoleLogger, FileLogger, measureAndLog, getDevElectronPath, getBuildElectronPath, getBuildVersion, ApplicationOptions } from '../../automation';
@@ -27,6 +27,8 @@ import { setup as setupLaunchTests } from './areas/workbench/launch.test';
 import { setup as setupTerminalTests } from './areas/terminal/terminal.test';
 import { setup as setupTaskTests } from './areas/task/task.test';
 import { setup as setupChatTests } from './areas/chat/chat.test';
+import { setup as setupChatAnonymousTests } from './areas/chat/chatAnonymous.test';
+import { setup as setupAccessibilityTests } from './areas/accessibility/accessibility.test';
 
 const rootPath = path.join(__dirname, '..', '..', '..');
 
@@ -405,4 +407,6 @@ describe(`VSCode Smoke Tests (${opts.web ? 'Web' : 'Electron'})`, () => {
 	if (!opts.web && !opts.remote && quality !== Quality.Dev && quality !== Quality.OSS) { setupLocalizationTests(logger); }
 	if (!opts.web && !opts.remote) { setupLaunchTests(logger); }
 	if (!opts.web) { setupChatTests(logger); }
+	if (!opts.web && quality === Quality.Insiders) { setupChatAnonymousTests(logger); }
+	setupAccessibilityTests(logger, opts);
 });

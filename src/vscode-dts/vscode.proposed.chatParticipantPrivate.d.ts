@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// version: 11
+// version: 12
 
 declare module 'vscode' {
 
@@ -30,12 +30,17 @@ declare module 'vscode' {
 	}
 
 	export class ChatRequestEditorData {
+
+		readonly editor: TextEditor;
+
 		//TODO@API should be the editor
 		document: TextDocument;
 		selection: Selection;
+
+		/** @deprecated */
 		wholeRange: Range;
 
-		constructor(document: TextDocument, selection: Selection, wholeRange: Range);
+		constructor(editor: TextEditor, document: TextDocument, selection: Selection, wholeRange: Range);
 	}
 
 	export class ChatRequestNotebookData {
@@ -56,9 +61,16 @@ declare module 'vscode' {
 		readonly attempt: number;
 
 		/**
-		 * The session identifier for this chat request
+		 * The session identifier for this chat request.
+		 *
+		 * @deprecated Use {@link chatSessionResource} instead.
 		 */
 		readonly sessionId: string;
+
+		/**
+		 * The resource URI for the chat session this request belongs to.
+		 */
+		readonly sessionResource: Uri;
 
 		/**
 		 * If automatic command detection is enabled.
@@ -88,7 +100,16 @@ declare module 'vscode' {
 		 */
 		readonly editedFileEvents?: ChatRequestEditedFileEvent[];
 
-		readonly isSubagent?: boolean;
+		/**
+		 * Unique ID for the subagent invocation, used to group tool calls from the same subagent run together.
+		 * Pass this to tool invocations when calling tools from within a subagent context.
+		 */
+		readonly subAgentInvocationId?: string;
+
+		/**
+		 * Display name of the subagent that is invoking this request.
+		 */
+		readonly subAgentName?: string;
 	}
 
 	export enum ChatRequestEditedFileEventKind {
@@ -148,6 +169,11 @@ declare module 'vscode' {
 	}
 
 	export class ChatResponseTurn2 {
+		/**
+		 * The id of the chat response. Used to identity an interaction with any of the chat surfaces.
+		 */
+		readonly id?: string;
+
 		/**
 		 * The content that was received from the chat participant. Only the stream parts that represent actual content (not metadata) are represented.
 		 */
@@ -220,13 +246,15 @@ declare module 'vscode' {
 
 	export interface LanguageModelToolInvocationOptions<T> {
 		chatRequestId?: string;
+		/** @deprecated Use {@link chatSessionResource} instead */
 		chatSessionId?: string;
+		chatSessionResource?: Uri;
 		chatInteractionId?: string;
 		terminalCommand?: string;
 		/**
-		 * Lets us add some nicer UI to toolcalls that came from a sub-agent, but in the long run, this should probably just be rendered in a similar way to thinking text + tool call groups
+		 * Unique ID for the subagent invocation, used to group tool calls from the same subagent run together.
 		 */
-		fromSubAgent?: boolean;
+		subAgentInvocationId?: string;
 	}
 
 	export interface LanguageModelToolInvocationPrepareOptions<T> {
@@ -235,7 +263,9 @@ declare module 'vscode' {
 		 */
 		input: T;
 		chatRequestId?: string;
+		/** @deprecated Use {@link chatSessionResource} instead */
 		chatSessionId?: string;
+		chatSessionResource?: Uri;
 		chatInteractionId?: string;
 	}
 
@@ -248,6 +278,8 @@ declare module 'vscode' {
 		toolResultMessage?: string | MarkdownString;
 		toolResultDetails?: Array<Uri | Location>;
 		toolMetadata?: unknown;
+		/** Whether there was an error calling the tool. The tool may still have partially succeeded. */
+		hasError?: boolean;
 	}
 
 	// #region Chat participant detection

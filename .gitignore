@@ -6,7 +6,7 @@ node_modules/
 .build/
 .vscode/extensions/**/out/
 extensions/**/dist/
-!extensions/open-remote-ssh/dist/
+src/vs/base/browser/ui/codicons/codicon/codicon.ttf
 /out*/
 /extensions/**/out/
 build/node_modules
@@ -21,11 +21,7 @@ vscode.db
 /cli/openssl
 product.overrides.json
 *.snap.actual
+*.tsbuildinfo
 .vscode-test
-
-# CortexIDE added these:
-.tmp/
-.tmp2/
-.tool-versions
-src/vs/workbench/contrib/cortexide/browser/react/out/**
-src/vs/workbench/contrib/cortexide/browser/react/src2/**
+vscode-telemetry-docs/
+test-output.json
