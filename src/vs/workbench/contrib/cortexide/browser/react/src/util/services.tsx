@@ -76,7 +76,8 @@ let refreshModelState: RefreshModelStateOfProvider
 const refreshModelStateListeners: Set<(s: RefreshModelStateOfProvider) => void> = new Set()
 const refreshModelProviderListeners: Set<(p: RefreshableProviderName, s: RefreshModelStateOfProvider) => void> = new Set()
 
-let colorThemeState: ColorScheme
+// Default to LIGHT so useIsDark() is never undefined before _registerServices runs
+let colorThemeState: ColorScheme = ColorScheme.LIGHT
 const colorThemeStateListeners: Set<(s: ColorScheme) => void> = new Set()
 
 const ctrlKZoneStreamingStateListeners: Set<(diffareaid: number, s: boolean) => void> = new Set()
@@ -145,10 +146,15 @@ export const _registerServices = (accessor: ServicesAccessor) => {
 	)
 
 	colorThemeState = themeService.getColorTheme().type
+	// Notify any already-mounted components so they get correct initial theme
+	colorThemeStateListeners.forEach(l => l(colorThemeState))
 	disposables.push(
 		themeService.onDidColorThemeChange(({ type }) => {
 			colorThemeState = type
-			colorThemeStateListeners.forEach(l => l(colorThemeState))
+			// Defer to next frame so we don't call React setState during theme application (avoids "update while rendering" when switching theme)
+			requestAnimationFrame(() => {
+				colorThemeStateListeners.forEach(l => l(colorThemeState))
+			})
 		})
 	)
 

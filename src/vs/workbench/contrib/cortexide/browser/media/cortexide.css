@@ -109,43 +109,18 @@
 
 /* ----------------------------------------------------------------------------------------
  * Workbench chrome & layout scaffolding
+ * Do NOT override body/part background and color or --vscode-* so the user's selected
+ * theme (e.g. Solarized Dark, Light+) applies. CortexIDE variables (--cortex-*, --void-*)
+ * remain in :root for use inside CortexIDE-specific UI (e.g. .void-scope, chat panel).
  * ------------------------------------------------------------------------------------- */
 body.monaco-workbench,
 .monaco-workbench {
-	background: var(--cortex-surface-0) !important;
-	color: var(--cortex-text-base) !important;
 	font-size: var(--cortex-font-body);
-}
-
-body.monaco-workbench {
-	--vscode-activityBar-background: var(--cortex-surface-2);
-	--vscode-activityBar-activeBorder: var(--cortex-brand);
-	--vscode-activityBarBadge-background: var(--cortex-brand);
-	--vscode-button-background: #0f0f0f;
-	--vscode-button-foreground: var(--cortex-text-base);
-	--vscode-button-hoverBackground: #1a1a1a;
-	--vscode-focusBorder: var(--cortex-brand);
-	--vscode-input-background: #080808;
-	--vscode-input-border: var(--cortex-border-strong);
-	--vscode-input-foreground: var(--cortex-text-base);
-	--vscode-list-activeSelectionBackground: #111111;
-	--vscode-menu-selectionBackground: #141414;
-	--vscode-panel-background: var(--cortex-surface-1);
-	--vscode-panel-border: var(--cortex-border-strong);
-	--vscode-sideBar-background: var(--cortex-surface-1);
-	--vscode-sideBarSectionHeader-background: var(--cortex-surface-1);
-	--vscode-statusBar-background: var(--cortex-surface-0);
-	--vscode-statusBar-border: var(--cortex-border-strong);
-	--vscode-tab-activeBackground: var(--cortex-surface-1);
-	--vscode-tab-inactiveBackground: var(--cortex-surface-0);
-	--vscode-titleBar-activeBackground: var(--cortex-surface-0);
-	--vscode-titleBar-border: #101010;
 }
 
 .monaco-workbench .part.titlebar,
 .monaco-workbench .part.statusbar {
 	backdrop-filter: blur(16px);
-	background: var(--cortex-surface-0) !important;
 	box-shadow: var(--cortex-shadow-hairline);
 }
 
@@ -153,20 +128,6 @@ body.monaco-workbench {
  * that prevent menubar dropdowns from appearing when appended to document.body */
 .monaco-workbench.windows .part.titlebar {
 	backdrop-filter: none;
-}
-
-.monaco-workbench .part.activitybar {
-	background: var(--cortex-surface-3) !important;
-	border-right: 1px solid var(--cortex-border-strong) !important;
-	box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.02);
-}
-
-.monaco-workbench .part.sidebar,
-.monaco-workbench .part.auxiliarybar,
-.monaco-workbench .part.panel {
-	background: var(--cortex-surface-1) !important;
-	border-color: var(--cortex-border-strong) !important;
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .monaco-workbench .part.sidebar > .content .pane-header,
@@ -192,26 +153,6 @@ body.monaco-workbench {
 	font-size: var(--cortex-font-label);
 	font-weight: 500;
 	letter-spacing: 0.01em;
-}
-
-.monaco-workbench .part.editor,
-.monaco-workbench .editor-container,
-.monaco-workbench .part.editor>.content .editor-group-container,
-.monaco-workbench .auxiliarybar-part {
-	background-color: var(--cortex-surface-1) !important;
-	color: var(--cortex-text-base) !important;
-}
-
-.monaco-workbench .tab,
-.monaco-workbench .monaco-list,
-.monaco-workbench .split-view-view,
-.monaco-workbench .pane-body,
-.monaco-editor,
-.monaco-editor .margin,
-.monaco-editor-background,
-.monaco-workbench .part.editor>.content .editor-group-container {
-	background-color: var(--cortex-surface-1) !important;
-	color: var(--cortex-text-base) !important;
 }
 
 .monaco-editor .void-sweepIdxBG {
@@ -305,108 +246,64 @@ body.monaco-workbench {
 /* ----------------------------------------------------------------------------------------
  * Explorer / Search / Extensions surfaces
  * ------------------------------------------------------------------------------------- */
-.monaco-workbench .part.sidebar .composite,
-.monaco-workbench .part.sidebar .pane-body,
-.monaco-workbench .part.sidebar .monaco-list,
-.monaco-workbench .part.sidebar .monaco-list-rows,
-.monaco-workbench .part.sidebar .monaco-tree,
-.monaco-workbench .part.sidebar .split-view-view,
-.monaco-workbench .part.sidebar .pane-body .monaco-list-row,
-.monaco-workbench .part.sidebar .pane-body .monaco-list-row:hover {
-	background-color: var(--cortex-surface-1) !important;
-	color: var(--cortex-text-base) !important;
-}
-
-.monaco-workbench .part.sidebar .pane-header,
-.monaco-workbench .part.sidebar .pane-header .title {
-	background-color: var(--cortex-surface-0) !important;
-	color: var(--cortex-text-base) !important;
-}
-
-.monaco-workbench .extensions-viewlet .extensions-list .monaco-list-row,
-.monaco-workbench .extensions-viewlet .extension-editor,
-.monaco-workbench .extensions-viewlet .extension-editor .body {
-	background-color: var(--cortex-surface-1) !important;
-	color: var(--cortex-text-base) !important;
-}
-
-.monaco-workbench .search-view .search-widget,
-.monaco-workbench .search-view .query-details,
-.monaco-workbench .search-view .monaco-split-view2,
-.monaco-workbench .search-view .results .monaco-list {
-	background-color: var(--cortex-surface-1) !important;
-	color: var(--cortex-text-base) !important;
-	border-color: var(--cortex-border-strong) !important;
-}
+/* Sidebar, extensions, search: use user theme (no cortex overrides) */
 
 /* ----------------------------------------------------------------------------------------
- * Chat / message input experience
+ * Chat / message input experience - use user theme so chat panel respects selected theme
  * ------------------------------------------------------------------------------------- */
 .monaco-workbench .interactive-session .chat-input-container {
-	background-color: var(--cortex-surface-2) !important;
-	border: 1px solid var(--cortex-border-strong) !important;
+	background-color: var(--vscode-input-background) !important;
+	border: 1px solid var(--vscode-input-border) !important;
 	box-shadow: none !important;
 }
 
 .monaco-workbench .interactive-session .chat-input-container:focus-within {
-	border-color: var(--cortex-brand) !important;
-	box-shadow: 0 0 0 1px var(--cortex-brand) inset;
+	border-color: var(--vscode-focusBorder) !important;
+	box-shadow: 0 0 0 1px var(--vscode-focusBorder) inset;
 }
 
 .monaco-workbench .interactive-session .chat-input-container .chat-editor-container .monaco-editor,
 .monaco-workbench .interactive-session .chat-input-container .chat-editor-container .monaco-editor .monaco-editor-background,
 .monaco-workbench .interactive-session .chat-input-container .chat-editor-container .monaco-editor .margin,
 .monaco-workbench .interactive-session .chat-input-container .chat-editor-container .monaco-editor .inputarea.ime-input {
-	background-color: var(--cortex-surface-2) !important;
-	color: var(--cortex-text-base) !important;
+	background-color: var(--vscode-input-background) !important;
+	color: var(--vscode-input-foreground) !important;
 }
 
 .monaco-workbench .interactive-session .chat-input-container .chat-editor-container .monaco-editor .cursor {
-	border-color: var(--cortex-text-base) !important;
+	border-color: var(--vscode-input-foreground) !important;
 }
 
 .monaco-workbench .interactive-session .chat-input-toolbars,
 .monaco-workbench .interactive-session .chat-input-toolbars .monaco-toolbar .action-item,
 .monaco-workbench .interactive-session .chat-modelPicker-item {
-	background-color: var(--cortex-surface-0) !important;
-	color: var(--cortex-text-base) !important;
-	border-color: var(--cortex-border-strong) !important;
+	background-color: var(--vscode-sideBar-background) !important;
+	color: var(--vscode-sideBar-foreground) !important;
+	border-color: var(--vscode-sideBar-border) !important;
+}
+
+/* Chat panel (auxiliary bar): override void/cortex variables so React chat UI uses theme */
+.monaco-workbench .part.auxiliarybar > .content {
+	--void-bg-1: var(--vscode-sideBar-background);
+	--void-bg-1-alt: var(--vscode-sideBar-background);
+	--void-bg-2: var(--vscode-sideBar-background);
+	--void-bg-2-alt: var(--vscode-sideBar-background);
+	--void-bg-2-hover: var(--vscode-list-hoverBackground, var(--vscode-sideBar-background));
+	--void-bg-3: var(--vscode-sideBar-background);
+	--void-fg-0: var(--vscode-sideBar-foreground);
+	--void-fg-1: var(--vscode-sideBar-foreground);
+	--void-fg-2: var(--vscode-sideBar-foreground);
+	--void-fg-3: var(--vscode-descriptionForeground, var(--vscode-sideBar-foreground));
+	--void-fg-4: var(--vscode-descriptionForeground, var(--vscode-sideBar-foreground));
+	--void-border-1: var(--vscode-sideBar-border, transparent);
+	--void-border-2: var(--vscode-sideBar-border, transparent);
+	--void-border-3: var(--vscode-sideBar-border, transparent);
+	--void-border-4: var(--vscode-sideBar-border, transparent);
 }
 
 /* ----------------------------------------------------------------------------------------
- * Settings experience
+ * Settings experience: use user theme (no cortex background/color overrides)
  * ------------------------------------------------------------------------------------- */
-.monaco-workbench .settings-editor,
-.monaco-workbench .settings-editor .settings-body,
-.monaco-workbench .settings-editor .settings-tree-container,
-.monaco-workbench .settings-editor .settings-toc-container {
-	background: var(--cortex-surface-1) !important;
-	color: var(--cortex-text-base);
-}
-
-.monaco-workbench .settings-editor .settings-header {
-	background: var(--cortex-surface-0) !important;
-	border-bottom: 1px solid var(--cortex-border-strong);
-}
-
-.monaco-workbench .settings-editor .settings-target-container .settings-target-button,
-.monaco-workbench .settings-editor .settings-header-controls .monaco-dropdown,
-.monaco-workbench .settings-editor .settings-target-container .monaco-select-box {
-	background: var(--cortex-surface-2) !important;
-	border-color: var(--cortex-border-strong) !important;
-	color: var(--cortex-text-base) !important;
-}
-
-.monaco-workbench .settings-editor .monaco-list.settings-toc-tree,
-.monaco-workbench .settings-editor .monaco-list.settings-toc-tree .monaco-list-row {
-	background: transparent !important;
-}
-
-.monaco-workbench .settings-editor .setting-item {
-	background: var(--cortex-surface-2) !important;
-	border: 1px solid var(--cortex-border-weak) !important;
-	border-radius: var(--cortex-radius-md);
-}
 
 /* styles for all containers used by void */
 .void-scope {
@@ -530,12 +427,13 @@ body.monaco-workbench {
 	background-size: contain;
 	background-repeat: no-repeat;
 	background-position: center;
+	border-radius: 50%;
 	-webkit-mask: none;
 	mask: none;
 }
 
 .monaco-workbench .editor-group-watermark .void-void-icon {
-	border-radius: 0 !important;
+	border-radius: 50% !important;
 	background-color: transparent !important;
 	mask: none !important;
 	-webkit-mask: none !important;
@@ -646,67 +544,4 @@ body.monaco-workbench {
 	color: var(--cortex-text-muted) !important;
 }
 
-/* ----------------------------------------------------------------------------------------
- * Settings / preferences
- * ------------------------------------------------------------------------------------- */
-.monaco-workbench .settings-editor,
-.monaco-workbench .settings-editor > .settings-header,
-.monaco-workbench .settings-editor > .settings-body,
-.monaco-workbench .settings-editor .settings-tree-container,
-.monaco-workbench .settings-editor .settings-toc-container,
-.monaco-workbench .settings-editor .settings-body > .monaco-split-view2 {
-	background: color-mix(in srgb, var(--void-bg-2-alt) 92%, #020204 8%) !important;
-	color: var(--void-fg-1) !important;
-	border-color: var(--void-border-3) !important;
-}
-
-.monaco-workbench .settings-editor .settings-header,
-.monaco-workbench .settings-editor .settings-body {
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
-}
-
-.monaco-workbench .settings-editor .suggest-input-container,
-.monaco-workbench .settings-editor .monaco-inputbox {
-	background: color-mix(in srgb, var(--void-bg-1) 85%, #050505 15%) !important;
-	border: 1px solid var(--void-border-2) !important;
-	border-radius: 14px !important;
-}
-
-.monaco-workbench .settings-editor .monaco-inputbox input {
-	background: transparent !important;
-	color: var(--void-fg-1) !important;
-}
-
-.monaco-workbench .settings-editor .monaco-list-row,
-.monaco-workbench .settings-editor .settings-tree-container .setting-item,
-.monaco-workbench .settings-editor .settings-tree-container .setting-item-contents {
-	background: transparent !important;
-	color: var(--void-fg-1) !important;
-	border-radius: 16px;
-}
-
-.monaco-workbench .settings-editor .monaco-list-row.focused,
-.monaco-workbench .settings-editor .monaco-list-row:hover,
-.monaco-workbench .settings-editor .setting-item.focused,
-.monaco-workbench .settings-editor .setting-item:hover {
-	background: color-mix(in srgb, var(--void-bg-1-alt) 70%, #0a0c16 30%) !important;
-	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
-}
-
-.monaco-workbench .settings-editor .settings-toc-container {
-	border-right: 1px solid var(--void-border-3) !important;
-}
-
-.monaco-workbench .settings-editor .settings-group-title-label,
-.monaco-workbench .settings-editor .setting-item-label,
-.monaco-workbench .settings-editor .setting-item-description {
-	color: var(--void-fg-1) !important;
-}
-
-.monaco-workbench .settings-editor .setting-item-title.is-overridden::before {
-	color: var(--void-warning) !important;
-}
-
-.monaco-workbench .settings-editor .settings-toc-container .monaco-list-row.focused .monaco-tl-contents {
-	color: var(--void-fg-0) !important;
-}
+/* Settings / preferences: use user theme (no void/cortex background overrides) */

@@ -227,7 +227,8 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 		this.availableUpdate.updateFilePath = path.join(cachePath, `CodeSetup-${this.productService.quality}-${update.version}.flag`);
 
 		await pfs.Promises.writeFile(this.availableUpdate.updateFilePath, 'flag');
-		const child = spawn(this.availableUpdate.packagePath, ['/verysilent', '/log', `/update="${this.availableUpdate.updateFilePath}"`, '/nocloseapplications', '/mergetasks=runcode,!desktopicon,!quicklaunchicon'], {
+		// Do not pass /mergetasks so the installer preserves the user's previous task choices (desktop icon, quick launch, etc.) from the registry instead of forcing our own.
+		const child = spawn(this.availableUpdate.packagePath, ['/verysilent', '/log', `/update="${this.availableUpdate.updateFilePath}"`, '/nocloseapplications'], {
 			detached: true,
 			stdio: ['ignore', 'ignore', 'ignore'],
 			windowsVerbatimArguments: true
@@ -256,7 +257,8 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 		if (this.availableUpdate.updateFilePath) {
 			fs.unlinkSync(this.availableUpdate.updateFilePath);
 		} else {
-			spawn(this.availableUpdate.packagePath, ['/silent', '/log', '/mergetasks=runcode,!desktopicon,!quicklaunchicon'], {
+			// Do not pass /mergetasks so the installer preserves the user's previous task choices (desktop icon, quick launch, etc.).
+			spawn(this.availableUpdate.packagePath, ['/silent', '/log'], {
 				detached: true,
 				stdio: ['ignore', 'ignore', 'ignore']
 			});

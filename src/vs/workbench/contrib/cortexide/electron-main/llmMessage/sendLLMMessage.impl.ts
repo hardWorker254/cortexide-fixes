@@ -610,6 +610,7 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 	let toolId = ''
 	let toolParamsStr = ''
 	let isRetrying = false // Flag to prevent processing streaming chunks during retry
+	let timeoutDeliveredPartial = false // Set when stall timeout fires with partial; outer catch skips onError
 
 	// Detect if this is a local provider for timeout optimization
 	const isExplicitLocalProviderChat = providerName === 'ollama' || providerName === 'vLLM' || providerName === 'lmStudio'
@@ -632,36 +633,47 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 	const processStreamingResponse = async (response: any) => {
 		_setAborter(() => response.controller.abort())
 
-		// For local models, add hard timeout with partial results
-		const overallTimeout = isLocalChat ? 20_000 : 120_000 // 20s for local, 120s for remote
+		// For local models: rolling stall timeout (reset on each chunk) so we only fire after no chunk for stallWindow.
+		// This prevents premature onFinalMessage(partial) which would freeze the UI while the model keeps streaming.
+		const stallWindowMs = isLocalChat ? 60_000 : 0 // 60s of no chunks = stall for local; remote uses one-shot below
+		const oneShotTimeoutMs = isLocalChat ? 0 : 120_000 // remote: 120s from start
 		const firstTokenTimeout = isLocalChat ? 10_000 : 30_000 // 10s for first token on local
 
 		let firstTokenReceived = false
+		let overallTimeoutId: ReturnType<typeof setTimeout> | null = null
+		let timeoutFired = false
 
-		// Set up overall timeout
-		const timeoutId = setTimeout(() => {
-			if (fullTextSoFar || fullReasoningSoFar || toolName) {
-				// We have partial results - commit them
-				const toolCall = rawToolCallObjOfParamsStr(toolName, toolParamsStr, toolId)
-				const toolCallObj = toolCall ? { toolCall } : {}
-				onFinalMessage({
-					fullText: fullTextSoFar,
-					fullReasoning: fullReasoningSoFar,
-					anthropicReasoning: null,
-					...toolCallObj
-				})
-				// Note: We don't call onError here since we have partial results
-			} else {
-				// No tokens received - abort
-				response.controller?.abort()
-				onError({
-					message: isLocalChat
-						? 'Local model timed out. Try a smaller model or use a cloud model for this task.'
-						: 'Request timed out.',
-					fullError: null
-				})
-			}
-		}, overallTimeout)
+		const scheduleOverallTimeout = () => {
+			if (overallTimeoutId) clearTimeout(overallTimeoutId)
+			const delay = isLocalChat ? stallWindowMs : oneShotTimeoutMs
+			if (delay <= 0) return
+			overallTimeoutId = setTimeout(() => {
+				timeoutFired = true
+				if (fullTextSoFar || fullReasoningSoFar || toolName) {
+					timeoutDeliveredPartial = true
+					const toolCall = rawToolCallObjOfParamsStr(toolName, toolParamsStr, toolId)
+					const toolCallObj = toolCall ? { toolCall } : {}
+					onFinalMessage({
+						fullText: fullTextSoFar,
+						fullReasoning: fullReasoningSoFar,
+						anthropicReasoning: null,
+						...toolCallObj
+					})
+					response.controller?.abort()
+				} else {
+					response.controller?.abort()
+					onError({
+						message: isLocalChat
+							? 'Local model timed out (no response for 60s). Try a smaller model or use a cloud model.'
+							: 'Request timed out.',
+						fullError: null
+					})
+				}
+			}, delay)
+		}
+
+		// Start overall timeout: rolling for local (reset on each chunk), one-shot for remote
+		scheduleOverallTimeout()
 
 		// Set up first token timeout (only for local models)
 		let firstTokenTimeoutId: ReturnType<typeof setTimeout> | null = null
@@ -682,10 +694,13 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 			for await (const chunk of response) {
 				// Check if we're retrying (another response is being processed)
 				if (isRetrying) {
-					clearTimeout(timeoutId)
+					if (overallTimeoutId) clearTimeout(overallTimeoutId)
 					if (firstTokenTimeoutId) clearTimeout(firstTokenTimeoutId)
 					return // Stop processing this streaming response, retry is in progress
 				}
+
+				// If timeout already fired with partial, stop processing (avoid double onFinalMessage)
+				if (timeoutFired) break
 
 				// Mark first token received
 				if (!firstTokenReceived) {
@@ -695,6 +710,9 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 						firstTokenTimeoutId = null
 					}
 				}
+
+				// Rolling timeout: reset on each chunk for local so we only fire on real stall
+				if (isLocalChat) scheduleOverallTimeout()
 
 				// message
 				const newText = chunk.choices[0]?.delta?.content ?? ''
@@ -748,10 +766,11 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 			}
 
 			// Clear timeouts on successful completion
-			clearTimeout(timeoutId)
+			if (overallTimeoutId) clearTimeout(overallTimeoutId)
 			if (firstTokenTimeoutId) clearTimeout(firstTokenTimeoutId)
 
-			// on final
+			// on final (skip if timeout already fired and committed partial)
+			if (timeoutFired) return
 			if (!fullTextSoFar && !fullReasoningSoFar && !toolName) {
 				onError({ message: 'CortexIDE: Response from model was empty.', fullError: null })
 			}
@@ -761,7 +780,7 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 				onFinalMessage({ fullText: fullTextSoFar, fullReasoning: fullReasoningSoFar, anthropicReasoning: null, ...toolCallObj });
 			}
 		} catch (streamError) {
-			clearTimeout(timeoutId)
+			if (overallTimeoutId) clearTimeout(overallTimeoutId)
 			if (firstTokenTimeoutId) clearTimeout(firstTokenTimeoutId)
 			// If error occurs during streaming, re-throw to be caught by outer catch handler
 			throw streamError
@@ -832,6 +851,9 @@ const _sendOpenAICompatibleChat = async ({ messages, onText, onFinalMessage, onE
 		})
 		// when error/fail - this catches errors of both .create() and .then(for await)
 		.catch(async error => {
+			// Stall timeout already delivered partial and aborted; don't show error
+			if (timeoutDeliveredPartial) return
+
 			// Abort streaming response if it's still running
 			if (streamingResponse) {
 				try {
