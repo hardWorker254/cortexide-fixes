@@ -282,6 +282,25 @@ body.monaco-workbench,
 	border-color: var(--vscode-sideBar-border) !important;
 }
 
+/* Chat panel (auxiliary bar): override void/cortex variables so React chat UI uses theme */
+.monaco-workbench .part.auxiliarybar > .content {
+	--void-bg-1: var(--vscode-sideBar-background);
+	--void-bg-1-alt: var(--vscode-sideBar-background);
+	--void-bg-2: var(--vscode-sideBar-background);
+	--void-bg-2-alt: var(--vscode-sideBar-background);
+	--void-bg-2-hover: var(--vscode-list-hoverBackground, var(--vscode-sideBar-background));
+	--void-bg-3: var(--vscode-sideBar-background);
+	--void-fg-0: var(--vscode-sideBar-foreground);
+	--void-fg-1: var(--vscode-sideBar-foreground);
+	--void-fg-2: var(--vscode-sideBar-foreground);
+	--void-fg-3: var(--vscode-descriptionForeground, var(--vscode-sideBar-foreground));
+	--void-fg-4: var(--vscode-descriptionForeground, var(--vscode-sideBar-foreground));
+	--void-border-1: var(--vscode-sideBar-border, transparent);
+	--void-border-2: var(--vscode-sideBar-border, transparent);
+	--void-border-3: var(--vscode-sideBar-border, transparent);
+	--void-border-4: var(--vscode-sideBar-border, transparent);
+}
+
 /* ----------------------------------------------------------------------------------------
  * Settings experience: use user theme (no cortex background/color overrides)
  * ------------------------------------------------------------------------------------- */
