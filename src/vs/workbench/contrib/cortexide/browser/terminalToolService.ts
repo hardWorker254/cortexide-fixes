@@ -125,7 +125,10 @@ export class TerminalToolService extends Disposable implements ITerminalToolServ
 	private async _createTerminal(props: { cwd: string | null, config: ICreateTerminalOptions['config'], hidden?: boolean }) {
 		const { cwd: override_cwd, config, hidden } = props;
 
-		const cwd: URI | string | undefined = (override_cwd ?? undefined) ?? this.workspaceContextService.getWorkspace().folders[0]?.uri;
+		const workspace = this.workspaceContextService.getWorkspace();
+		const [firstFolder] = workspace.folders;
+		const workspaceFolderUri = firstFolder ? firstFolder.uri : undefined;
+		const cwd: URI | string | undefined = override_cwd !== null ? override_cwd : workspaceFolderUri;
 
 		const options: ICreateTerminalOptions = {
 			cwd,
@@ -216,7 +219,7 @@ export class TerminalToolService extends Disposable implements ITerminalToolServ
 			throw new Error(`Read Terminal: Terminal with ID ${terminalId} does not exist.`);
 		}
 
-		// Ensure the xterm.js instance has been created – otherwise we cannot access the buffer.
+		// Ensure the xterm.js instance has been created - otherwise we cannot access the buffer.
 		if (!terminal.xterm) {
 			throw new Error('Read Terminal: The requested terminal has not yet been rendered and therefore has no scrollback buffer available.');
 		}
