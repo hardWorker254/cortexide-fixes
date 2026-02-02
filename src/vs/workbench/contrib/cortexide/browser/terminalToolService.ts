@@ -125,10 +125,18 @@ export class TerminalToolService extends Disposable implements ITerminalToolServ
 	private async _createTerminal(props: { cwd: string | null, config: ICreateTerminalOptions['config'], hidden?: boolean }) {
 		const { cwd: override_cwd, config, hidden } = props;
 
-		const workspace = this.workspaceContextService.getWorkspace();
-		const [firstFolder] = workspace.folders;
-		const workspaceFolderUri = firstFolder ? firstFolder.uri : undefined;
-		const cwd: URI | string | undefined = override_cwd !== null ? override_cwd : workspaceFolderUri;
+		let cwd: URI | string | undefined;
+		if (override_cwd !== null) {
+			cwd = override_cwd;
+		} else {
+			const workspace = this.workspaceContextService.getWorkspace();
+			if (workspace.folders.length > 0) {
+				const firstFolder = workspace.folders[0];
+				if (firstFolder) {
+					cwd = firstFolder.uri;
+				}
+			}
+		}
 
 		const options: ICreateTerminalOptions = {
 			cwd,
