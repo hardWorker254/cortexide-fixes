@@ -112,9 +112,6 @@ function buildWin32Setup(arch: string, target: string): task.CallbackTask {
 			Quality: quality
 		};
 
-<<<<<<< Updated upstream
-=======
-<<<<<<< HEAD:build/gulpfile.vscode.win32.js
 		// CortexIDE: Disable APPX packaging (Windows Store packages)
 		// APPX packages are not needed for CortexIDE distribution
 		// if (quality !== 'exploration') {
@@ -122,18 +119,11 @@ function buildWin32Setup(arch: string, target: string): task.CallbackTask {
 		// 	definitions['AppxPackageDll'] = `${quality === 'stable' ? 'code' : 'code_insider'}_explorer_command_${arch}.dll`;
 		// 	definitions['AppxPackageName'] = `${product.win32AppUserModelId}`;
 		// }
-=======
->>>>>>> Stashed changes
 		if (quality === 'stable' || quality === 'insider') {
 			definitions['AppxPackage'] = `${quality === 'stable' ? 'code' : 'code_insider'}_${arch}.appx`;
 			definitions['AppxPackageDll'] = `${quality === 'stable' ? 'code' : 'code_insider'}_explorer_command_${arch}.dll`;
 			definitions['AppxPackageName'] = `${product.win32AppUserModelId}`;
 		}
-<<<<<<< Updated upstream
-=======
->>>>>>> vscode/main:build/gulpfile.vscode.win32.ts
->>>>>>> Stashed changes
-
 		packageInnoSetup(issPath, { definitions }, cb as (err?: Error | null) => void);
 	};
 }

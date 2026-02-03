@@ -50,12 +50,6 @@ const BUILD_TARGETS = [
 	{ platform: 'linux', arch: 'x64' },
 	{ platform: 'linux', arch: 'armhf' },
 	{ platform: 'linux', arch: 'arm64' },
-<<<<<<< Updated upstream
-=======
-	{ platform: 'linux', arch: 'ppc64le' },
-	{ platform: 'linux', arch: 'riscv64' },
-	{ platform: 'linux', arch: 'loong64' },
->>>>>>> Stashed changes
 	{ platform: 'alpine', arch: 'arm64' },
 	// legacy: we use to ship only one alpine so it was put in the arch, but now we ship
 	// multiple alpine images and moved to a better model (alpine as the platform)
@@ -165,21 +159,9 @@ function getNodeChecksum(expectedName: string): string | undefined {
 function extractAlpinefromDocker(nodeVersion: string, platform: string, arch: string) {
 	const imageName = arch === 'arm64' ? 'arm64v8/node' : 'node';
 	log(`Downloading node.js ${nodeVersion} ${platform} ${arch} from docker image ${imageName}`);
-<<<<<<< Updated upstream
 	const contents = cp.execSync(`docker run --rm ${imageName}:${nodeVersion}-alpine /bin/sh -c 'cat \`which node\`'`, { maxBuffer: 100 * 1024 * 1024, encoding: 'buffer' });
 	// eslint-disable-next-line local/code-no-dangerous-type-assertions
 	return es.readArray([new File({ path: 'node', contents, stat: { mode: parseInt('755', 8) } as fs.Stats })]);
-=======
-<<<<<<< HEAD:build/gulpfile.reh.js
-	// Increased buffer size to 500MB to handle larger Node.js binaries (v22+)
-	const contents = cp.execSync(`docker run --rm ${imageName}:${nodeVersion}-alpine /bin/sh -c 'cat \`which node\`'`, { maxBuffer: 500 * 1024 * 1024, encoding: 'buffer' });
-	return es.readArray([new File({ path: 'node', contents, stat: { mode: parseInt('755', 8) } })]);
-=======
-	const contents = cp.execSync(`docker run --rm ${imageName}:${nodeVersion}-alpine /bin/sh -c 'cat \`which node\`'`, { maxBuffer: 100 * 1024 * 1024, encoding: 'buffer' });
-	// eslint-disable-next-line local/code-no-dangerous-type-assertions
-	return es.readArray([new File({ path: 'node', contents, stat: { mode: parseInt('755', 8) } as fs.Stats })]);
->>>>>>> vscode/main:build/gulpfile.reh.ts
->>>>>>> Stashed changes
 }
 
 const { nodeVersion, internalNodeVersion } = getNodeVersion();

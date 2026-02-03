@@ -25,27 +25,12 @@ const commit = getVersion(root);
 
 const linuxPackageRevision = Math.floor(new Date().getTime() / 1000);
 
-<<<<<<< Updated upstream
-=======
-<<<<<<< HEAD:build/gulpfile.vscode.linux.js
+
 /**
  * @param {string} arch
  */
-function getDebPackageArch(arch) {
+function getDebPackageArch(arch: string) {
 	return { x64: 'amd64', armhf: 'armhf', arm64: 'arm64', ppc64le: 'ppc64el', riscv64: 'riscv64', loong64: 'loong64' }[arch];
-=======
->>>>>>> Stashed changes
-function getDebPackageArch(arch: string): string {
-	switch (arch) {
-		case 'x64': return 'amd64';
-		case 'armhf': return 'armhf';
-		case 'arm64': return 'arm64';
-		default: throw new Error(`Unknown arch: ${arch}`);
-	}
-<<<<<<< Updated upstream
-=======
->>>>>>> vscode/main:build/gulpfile.vscode.linux.ts
->>>>>>> Stashed changes
 }
 
 function prepareDebPackage(arch: string) {
@@ -149,27 +134,10 @@ function getRpmBuildPath(rpmArch: string): string {
 	return '.build/linux/rpm/' + rpmArch + '/rpmbuild';
 }
 
-<<<<<<< Updated upstream
-=======
-<<<<<<< HEAD:build/gulpfile.vscode.linux.js
-/**
- * @param {string} arch
- */
-function getRpmPackageArch(arch) {
+
+function getRpmPackageArch(arch: string) {
 	return { x64: 'x86_64', armhf: 'armv7hl', arm64: 'aarch64', ppc64le: 'ppc64le', riscv64: 'riscv64', loong64: 'loong64' }[arch];
-=======
->>>>>>> Stashed changes
-function getRpmPackageArch(arch: string): string {
-	switch (arch) {
-		case 'x64': return 'x86_64';
-		case 'armhf': return 'armv7hl';
-		case 'arm64': return 'aarch64';
-		default: throw new Error(`Unknown arch: ${arch}`);
-	}
-<<<<<<< Updated upstream
-=======
->>>>>>> vscode/main:build/gulpfile.vscode.linux.ts
->>>>>>> Stashed changes
+
 }
 
 function prepareRpmPackage(arch: string) {
@@ -312,12 +280,6 @@ const BUILD_TARGETS = [
 	{ arch: 'x64' },
 	{ arch: 'armhf' },
 	{ arch: 'arm64' },
-<<<<<<< Updated upstream
-=======
-	{ arch: 'ppc64le' },
-	{ arch: 'riscv64' },
-	{ arch: 'loong64' },
->>>>>>> Stashed changes
 ];
 
 BUILD_TARGETS.forEach(({ arch }) => {

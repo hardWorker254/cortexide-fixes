@@ -92,12 +92,6 @@ const vscodeResourceIncludes = [
 	// Welcome
 	'out-build/vs/workbench/contrib/welcomeGettingStarted/common/media/**/*.{svg,png}',
 
-<<<<<<< Updated upstream
-=======
-	// Workbench Media (logo, icons)
-	'out-build/vs/workbench/browser/media/**/*.{svg,png}',
-
->>>>>>> Stashed changes
 	// Extensions
 	'out-build/vs/workbench/contrib/extensions/browser/media/{theme-icon.png,language-icon.svg}',
 	'out-build/vs/workbench/services/extensionManagement/common/media/*.{svg,png}',
@@ -376,36 +370,12 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			all = es.merge(all, shortcut, policyDest);
 		}
 
-<<<<<<< Updated upstream
+
 		let result: NodeJS.ReadWriteStream = all
 			.pipe(util.skipDirectories())
 			.pipe(util.fixWin32DirectoryPermissions())
 			.pipe(filter(['**', '!**/.github/**'], { dot: true })) // https://github.com/microsoft/vscode/issues/116523
 			.pipe(electron({ ...config, platform, arch: arch === 'armhf' ? 'arm' : arch, ffmpegChromium: false }))
-=======
-<<<<<<< HEAD:build/gulpfile.vscode.js
-		// CORTEXIDE/VSCODIUM: Support custom Electron repositories for alternative architectures
-		// This allows using VSCODE_ELECTRON_REPOSITORY and VSCODE_ELECTRON_TAG env vars
-		const electronOverride = {};
-		if (process.env.VSCODE_ELECTRON_REPOSITORY) {
-			electronOverride.repo = process.env.VSCODE_ELECTRON_REPOSITORY;
-		}
-		if (process.env.VSCODE_ELECTRON_TAG) {
-			electronOverride.tag = process.env.VSCODE_ELECTRON_TAG;
-		}
-		const hasElectronOverride = electronOverride.repo || electronOverride.tag;
-
-		let result = all
-=======
-		let result: NodeJS.ReadWriteStream = all
->>>>>>> vscode/main:build/gulpfile.vscode.ts
-			.pipe(util.skipDirectories())
-			.pipe(util.fixWin32DirectoryPermissions())
-			.pipe(filter(['**', '!**/.github/**'], { dot: true })) // https://github.com/microsoft/vscode/issues/116523
-			.pipe(electron({ ...config, ...(hasElectronOverride ? electronOverride : {}), platform, arch: arch === 'armhf' ? 'arm' : arch, ffmpegChromium: false }))
->>>>>>> Stashed changes
-			.pipe(filter(['**', '!LICENSE', '!version'], { dot: true }));
-
 		if (platform === 'linux') {
 			result = es.merge(result, gulp.src('resources/completions/bash/code', { base: '.' })
 				.pipe(replace('@@APPNAME@@', product.applicationName))
@@ -531,12 +501,6 @@ const BUILD_TARGETS = [
 	{ platform: 'linux', arch: 'x64' },
 	{ platform: 'linux', arch: 'armhf' },
 	{ platform: 'linux', arch: 'arm64' },
-<<<<<<< Updated upstream
-=======
-	{ platform: 'linux', arch: 'ppc64le' },
-	{ platform: 'linux', arch: 'riscv64' },
-	{ platform: 'linux', arch: 'loong64' },
->>>>>>> Stashed changes
 ];
 BUILD_TARGETS.forEach(buildTarget => {
 	const dashed = (str: string) => (str ? `-${str}` : ``);
