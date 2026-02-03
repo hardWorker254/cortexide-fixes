@@ -3,24 +3,34 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as es from 'event-stream';
-import _debounce from 'debounce';
-import _filter from 'gulp-filter';
-import rename from 'gulp-rename';
 import path from 'path';
 import fs from 'fs';
-
-import VinylFile from 'vinyl';
-import through from 'through';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import sm from 'source-map';
 import { pathToFileURL } from 'url';
 import ternaryStream from 'ternary-stream';
 import type { Transform } from 'stream';
 import * as tar from 'tar';
 
-const root = path.dirname(path.dirname(import.meta.dirname));
+// Creating Require
+const require = createRequire(import.meta.url);
 
-// Use require for rimraf 2.2.8 (CommonJS module, no default export)
+
+const es = require('event-stream');
+const _filter = require('gulp-filter');
+const rename = require('gulp-rename');
+const _debounce = require('debounce');
+const through = require('through');
+const VinylFile = require('vinyl');
+
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const root = path.dirname(path.dirname(__dirname));
+
+
 const rimrafModule = require('rimraf');
 
 export interface ICancellationToken {
